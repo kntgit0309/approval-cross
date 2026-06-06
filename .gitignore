@@ -1,0 +1,9 @@
+.env
+.env.local
+*.log
+public/
+auto_push_state.json
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
