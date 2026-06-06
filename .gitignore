@@ -1,8 +1,10 @@
 .env
 .env.local
 *.log
-public/
+dxc-approval/public/
 auto_push_state.json
+tracking-ui/store.json
+tracking-ui/usercache.json
 node_modules/
 __pycache__/
 *.pyc

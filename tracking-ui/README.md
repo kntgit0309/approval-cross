@@ -1,377 +1,244 @@
-# Lark Approval Tracking — Thiết kế & Tài liệu
+# Approval Tracking — Card + H5 cho nhân viên
 
-> Luồng tracking phê duyệt nhiều cấp hiển thị trong Lark Chat, lấy dữ liệu từ Lark Approval native (approval.larksuite.com)
+> Gửi cho **nhân viên (người đề xuất)** một card Lark theo dõi tiến độ phê duyệt **nhiều cấp**, kèm nút mở **trang H5 chi tiết** (timeline). Dùng chung cho cả **HR** (đơn nghỉ phép/OT) lẫn **DXC** (Đề Xuất Chi). Card **tự cập nhật** khi có người duyệt.
 
----
-
-## Kiến trúc tổng quan
-
-```
-Lark Approval API
-  ↓ (Webhook callback khi status thay đổi)
-Backend Server (FastAPI / Node.js)
-  ↓ GET /approval/v4/instances/{instance_id}
-  ↓
-  ├── Interactive Card JSON  →  PATCH vào Lark message (realtime update)
-  └── H5 MiniApp URL         →  Link nhúng trong card → mở trong Lark browser
-```
+Đây là **bản chạy thật**, cắm vào kiến trúc sẵn có (`hr-approval/`, `dxc-approval/`) — không cần build, không dependency ngoài, chỉ dùng `lark-cli` (đã config profile trên Mac mini).
 
 ---
 
-## 1. Lark Design Tokens
-
-Toàn bộ UI áp dụng đúng design system của Lark/Feishu:
-
-### Màu sắc
-
-| Token | Hex | Dùng cho |
-|---|---|---|
-| `primary` | `#1456F0` | Button, header, link, progress bar |
-| `primaryHov` | `#0E47D6` | Button hover state |
-| `primaryBg` | `#EEF3FF` | Tag background (primary) |
-| `success` | `#1CB87E` | Trạng thái "Đã duyệt" |
-| `successBg` | `#E8F9F2` | Background tag success |
-| `warn` | `#FF8800` | Trạng thái "Đang duyệt" |
-| `warnBg` | `#FFF4E5` | Background callout đang xử lý |
-| `danger` | `#F54A45` | Trạng thái "Từ chối" |
-| `dangerBg` | `#FFF0EF` | Background tag danger |
-| `neutral9` | `#1F2329` | Text chính (title, name) |
-| `neutral8` | `#3D3D3D` | Text thứ cấp |
-| `neutral7` | `#51545B` | Button text phụ |
-| `neutral6` | `#646A73` | Label, meta |
-| `neutral5` | `#8F959E` | Placeholder, time |
-| `neutral4` | `#B2B8C0` | Icon phụ, border nhạt |
-| `neutral3` | `#DEE0E3` | Border mặc định, divider |
-| `neutral2` | `#F3F4F5` | Background row, tag neutral |
-| `neutral1` | `#F9FAFB` | Background panel H5 |
-| `white` | `#FFFFFF` | Background card, button |
-| Desktop bg | `#E8ECF2` | Background tổng thể Lark desktop |
-
-### Typography
+## 🗺️ Luồng
 
 ```
-font-family: 'PingFang SC', 'SF Pro Text', -apple-system, 'Helvetica Neue', sans-serif
-```
+                ┌──────────── Lúc submit (hoặc bất kỳ lúc nào) ────────────┐
+push.js/push_batch.py tạo instance Approval [KAI]  ──┐
+                                                     ↓
+            node tracking-ui/send.js <instance> <nhân_viên>   (hoặc POST /send)
+                                                     ↓
+            lib.fetchInstance(instance)  ← GET Approval [KAI] (profile tenant2)
+            lib.normalize()              → canonical JSON (HR/DXC tự nhận diện)
+            lib.buildCard()              → Lark Interactive Card
+            lib.sendCard(to, card)       → im/v1/messages (bot writer-app tenant 1)
+                                                     ↓
+                          📩 Nhân viên nhận card trong Lark
+                          [🔎 Xem chi tiết] → https://track.…/track?instance=…
+                                                     ↓
+                          H5 page fetch /track/data → render timeline
 
-| Dùng cho | Size | Weight |
-|---|---|---|
-| Card title | 14px | 600 |
-| H5 page title | 16px | 600 |
-| Nav bar title | 15px | 600 |
-| Body / meta | 12–13px | 400–500 |
-| Tag / label | 11px | 500 |
-| Timestamp | 11px | 400 |
-
-### Border radius & Shadow
-
-```
-radius:   8px   (card nội dung, button, tag)
-radiusLg: 12px  (card container chính)
-
-shadow:   0 2px 8px rgba(31,35,41,0.10), 0 0 1px rgba(31,35,41,0.08)
-shadowLg: 0 8px 24px rgba(31,35,41,0.12), 0 2px 6px rgba(31,35,41,0.06)
+                ┌──────────── Khi có người duyệt/từ chối ────────────┐
+Lark approval_instance event ──→ /event (server.js :3400)
+                                     ↓ lib.getSent(instance) → message_id đã gửi
+                                     ↓ re-fetch + normalize + buildCard
+                                     ↓ lib.patchCard(message_id, card)
+                          🔄 Card cũ trong chat nhân viên TỰ cập nhật tiến độ mới
 ```
 
 ---
 
-## 2. Status Map
+## 📁 Files
 
-| Status | Label | Màu | Icon |
+```
+tracking-ui/
+├── server.js              # Standalone tracking server :3400 (serve H5 + data + send + patch)
+├── lib.js                 # Core: fetch/normalize/card/send/patch/store/resolveUsers
+├── send.js                # CLI: gửi card tracking cho 1 nhân viên
+├── public/
+│   └── track.html         # H5 detail page — self-contained (vanilla, no build)
+├── approval-tracking.jsx  # Mockup React gốc (tham chiếu thiết kế)
+├── store.json             # (runtime, gitignored) instance → {message_id, receive_id, sys}
+├── usercache.json         # (runtime, gitignored) open_id → {name, initials}
+└── README.md
+```
+
+---
+
+## 🌐 Endpoints (`server.js`, port 3400)
+
+| Endpoint | Method | Body / Query | Mô tả |
 |---|---|---|---|
-| `approved` | Đã duyệt | `#1CB87E` | ✓ (SVG polyline) |
-| `in_progress` | Đang duyệt | `#FF8800` | ••• (3 dot animation) |
-| `rejected` | Từ chối | `#F54A45` | ✕ |
-| `pending` | Chờ duyệt | `#8F959E` | số thứ tự cấp |
+| `/` | GET | — | Health check |
+| `/track` | GET | `?instance=CODE&sys=hr\|dxc` | Trả H5 page (`public/track.html`) |
+| `/track/data` | GET | `?instance=CODE&sys=…` | Canonical JSON (H5 fetch cái này) |
+| `/track/card` | GET | `?instance=CODE&sys=…` | Preview card JSON (debug) |
+| `/track/push` | POST | `{instance, webhook?, sys?, force?}` | **Build card + bắn vào webhook** (cho Base Automation). Chống gửi trùng multi-K |
+| `/send` | POST | `{instance, to, sys?}` | Build card + DM nhân viên (cần bot publish) |
+| `/event` | POST | Lark event | `approval_instance` → re-fetch + PATCH card đã gửi |
+
+`instance=DEMO` → trả dữ liệu mẫu, **không cần instance thật** (để xem/khoe giao diện ngay).
 
 ---
 
-## 3. Component: Interactive Card (Lark Chat)
+## 🧩 Canonical JSON (hợp đồng giữa lib ↔ card ↔ H5)
 
-Hiển thị như bot message trong Lark group/DM. Cấu trúc:
-
-```
-┌─────────────────────────────────────┐
-│ [icon] Yêu cầu phê duyệt  [Đang duyệt] │  ← Header bar màu primary
-├─────────────────────────────────────┤
-│ Tiêu đề đề xuất                      │
-│ [Tag: loại] [Tag: số tiền] [Tag: ID] │
-├─────────────────────────────────────┤
-│ [Avatar] Tên người gửi · Dept  Giờ  │  ← Submitter row
-├─────────────────────────────────────┤
-│ Tiến độ phê duyệt           2/4 cấp │
-│ ████████░░░░░░░░░░░░░░░░░░░░░░░    │  ← Progress bar gradient
-│ ●──✓──●···──○──○                    │  ← Step dot track
-│ Lan   Hùng  Dũng  Hà               │
-├─────────────────────────────────────┤
-│ ⚠ Đang chờ phê duyệt               │  ← Callout warnBg
-│   [Avatar] Phạm Quốc Dũng — Giám đốc│
-├─────────────────────────────────────┤
-│ [  Xem chi tiết  ]  [ Nhắc nhở ]   │  ← Actions
-└─────────────────────────────────────┘
-```
-
-### Lark Interactive Card JSON (template)
-
-```json
+```jsonc
 {
-  "config": { "wide_screen_mode": true },
-  "header": {
-    "template": "blue",
-    "title": { "tag": "plain_text", "content": "Yêu cầu phê duyệt" }
-  },
-  "elements": [
-    {
-      "tag": "div",
-      "text": { "tag": "lark_md", "content": "**Đề xuất mua thiết bị văn phòng Q3**" }
-    },
-    {
-      "tag": "div",
-      "fields": [
-        { "is_short": true, "text": { "tag": "lark_md", "content": "**Người gửi**\nNguyễn Minh Tuấn" }},
-        { "is_short": true, "text": { "tag": "lark_md", "content": "**Số tiền**\n48.500.000 ₫" }}
-      ]
-    },
-    { "tag": "hr" },
-    {
-      "tag": "note",
-      "elements": [
-        { "tag": "plain_text", "content": "⏳ Đang chờ: Phạm Quốc Dũng — Giám đốc bộ phận" }
-      ]
-    },
-    {
-      "tag": "action",
-      "actions": [
-        {
-          "tag": "button",
-          "text": { "tag": "plain_text", "content": "Xem chi tiết" },
-          "type": "primary",
-          "url": "https://your-h5-app.com/approval?id=APP-2025-0612"
-        },
-        {
-          "tag": "button",
-          "text": { "tag": "plain_text", "content": "Nhắc nhở" },
-          "type": "default",
-          "value": { "action": "remind", "instance_id": "APP-2025-0612" }
-        }
-      ]
-    }
-  ]
+  "instanceCode": "…", "id": "LC2343K1", "system": "dxc",
+  "status": "in_progress",                 // approved | in_progress | rejected | canceled
+  "title": "Đề Xuất Chi · LC2343K1",
+  "type": "Thanh toán", "amount": "12,500,000 VND", "summary": "…",
+  "submitter": { "name": "…", "dept": "…", "time": "…", "initials": "KN", "color": "#1456F0" },
+  "tags":  [ { "label": "Thanh toán", "kind": "type" }, … ],   // kind: type|amount|id|date
+  "meta":  [ { "label": "Người gửi", "value": "…" }, … ],       // hàng key-value cho info card
+  "steps": [ { "level": 1, "role": "Quản lý", "name": "…", "initials": "…",
+               "color": "#1CB87E", "status": "approved", "time": "06/06 09:14",
+               "comment": "…" }, … ],
+  "links": { "record": "…", "qr": "…" }, "updatedAt": "09:14 06/06/2026"
 }
 ```
 
----
-
-## 4. Component: H5 MiniApp (Detail Panel)
-
-Trang web nhúng trong Lark browser / side panel. Cấu trúc:
-
-```
-┌─────────────────────────────────────┐
-│ ← Chi tiết phê duyệt    [Đang duyệt]│  ← Nav bar (white, border-bottom)
-├─────────────────────────────────────┤
-│ Info Card (white)                   │
-│   Tiêu đề 16px/600                  │
-│   Tags: loại · tiền · ID            │
-│   Người gửi | Thời gian | Mô tả     │  ← Key-value rows
-├─────────────────────────────────────┤
-│ Quy trình phê duyệt                 │
-│ ████████░░░░░░░░  2/4 cấp          │  ← Progress bar
-│                                     │
-│  ✓ ─────────────────────────────   │
-│  [TTL] Trần Thị Lan    [Đã duyệt]   │  ← Step card (successBg border)
-│  🕐 06/06 09:14                     │
-│  > Xem nhận xét ▼                   │  ← Expandable comment
-│                                     │
-│  ✓ ─────────────────────────────   │
-│  [LVH] Lê Văn Hùng     [Đã duyệt]  │
-│                                     │
-│  ··· ───────────────────────────   │  ← Animated dots
-│  [PQD] Phạm Quốc Dũng [Đang duyệt] │  ← warnBg border
-│                                     │
-│  4  ────────────────────────────   │
-│  [NTH] Ngô Thanh Hà    [Chờ duyệt] │  ← neutral border
-│  Chưa đến lượt phê duyệt (italic)  │
-├─────────────────────────────────────┤
-│ [  Nhắc người duyệt  ]  [ Rút đơn ]│  ← Footer actions
-└─────────────────────────────────────┘
-```
-
-### Tính năng H5
-- Click step card → expand/collapse comment (animated `max-height`)
-- Progress bar animated khi load
-- Scroll độc lập, footer cố định
-- Dot animation `larkDot` cho bước `in_progress`
+Nguồn dữ liệu thật: `GET /open-apis/approval/v4/instances/{code}` (tenant2 KAI).
+- `task_list[]` → `steps[]` (status APPROVED→approved, REJECTED→rejected, PENDING active→in_progress, còn lại pending).
+- `form` (JSON widgets) → title/amount/dates/… match theo **tên widget** (`Người đề xuất:`, `Số tiền`, `Loại đơn`, `Ngày bắt đầu`…).
+- Tên người duyệt: `open_id` → `contact/v3/users` (cache `usercache.json`).
+- ⚠️ Người gửi lấy từ widget **`Người đề xuất:`** (submitter native là Long admin proxy do cross-tenant — xem README gốc).
 
 ---
 
-## 5. API Tích hợp
+## ⚙️ Setup & Deploy
 
-### Lấy dữ liệu approval instance
+> ⚠️ **Port (đã đối chiếu lsof trên mini production `ISuccess Mac mini`):** tracking dùng **`3400`** vì đó là port TRỐNG đúng họ. PORT (local) độc lập với TRACK_BASE_URL (host public) — cả hai override qua env.
 
-```http
-GET https://open.larksuite.com/open-apis/approval/v4/instances/{instance_id}
-Authorization: Bearer {tenant_access_token}
-```
+**Bản đồ port Mac mini (thật):** `3100` hr-approval · `3200` dxc-approval · `3300` Support Console (`cssupport.*`) · `3401` home · `18790` **goclaw (BẬN — đừng dùng)** · ngoài ra bận: 3000/3001/4173/5432/7456/8000/8080/8081/8765-8770/8773/8787/9000/9100/20128. → **`3400` TRỐNG** (đã verify).
 
-Response fields cần dùng:
-
-```json
-{
-  "instance": {
-    "approval_code": "...",
-    "status": "PENDING",
-    "form": "...",
-    "task_list": [
-      {
-        "id": "...",
-        "node_name": "Quản lý trực tiếp",
-        "status": "APPROVED",
-        "user_id": "...",
-        "start_time": "...",
-        "end_time": "...",
-        "comments": [{ "content": "..." }]
-      }
-    ],
-    "timeline": [...]
-  }
-}
-```
-
-### Webhook event khi có cập nhật
-
-```json
-{
-  "event": {
-    "type": "approval_instance",
-    "approval_code": "...",
-    "instance_code": "APP-2025-0612",
-    "status": "PENDING",
-    "task": {
-      "node_name": "Giám đốc bộ phận",
-      "status": "APPROVED",
-      "user_id": "..."
-    }
-  }
-}
-```
-
-### Update card sau khi có approver mới
-
-```http
-PATCH https://open.larksuite.com/open-apis/im/v1/messages/{message_id}
-Content-Type: application/json
-Authorization: Bearer {token}
-
-{
-  "msg_type": "interactive",
-  "content": "{...updated card JSON...}"
-}
-```
-
----
-
-## 6. Backend Handler (FastAPI)
-
-```python
-from fastapi import FastAPI, Request
-import httpx
-
-app = FastAPI()
-
-@app.post("/webhook/approval")
-async def handle_approval_event(request: Request):
-    body = await request.json()
-    event = body.get("event", {})
-    instance_id = event.get("instance_code")
-    
-    # 1. Lấy full instance data
-    instance = await get_approval_instance(instance_id)
-    
-    # 2. Build card JSON mới
-    card = build_approval_card(instance)
-    
-    # 3. Patch message trong Lark chat
-    message_id = await get_message_id_by_instance(instance_id)
-    await patch_lark_message(message_id, card)
-    
-    return {"code": 0}
-
-async def get_approval_instance(instance_id: str):
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://open.larksuite.com/open-apis/approval/v4/instances/{instance_id}",
-            headers={"Authorization": f"Bearer {TENANT_TOKEN}"}
-        )
-        return resp.json()["data"]["instance"]
-```
-
----
-
-## 7. H5 App Setup
+> ⚠️ **Domain:** `track.kntmcptools.online` đã bị một SPA khác chiếm (Cloudflare Pages / tunnel khác — KHÔNG có trong `config.yml` của mini). Vì vậy tracking dùng hostname riêng **`atrack.kntmcptools.online`** (trống), route mới qua chính tunnel mini.
 
 ```bash
-# Next.js hoặc plain Vite React
-npm create vite@latest lark-approval-h5 -- --template react
-cd lark-approval-h5
-npm install @larksuite/web-sdk  # Lark JSAPI cho auth
+# 1. Chạy server trên mini  (PORT + TRACK_BASE_URL override qua env)
+PORT=3400 TRACK_BASE_URL=https://atrack.kntmcptools.online node tracking-ui/server.js
+#   (hoặc pm2 start tracking-ui/server.js --name track / launchd)
+
+# 2a. Thêm vào ~/.cloudflared/config.yml (TRÊN dòng `- service: http_status:404`):
+#       - hostname: atrack.kntmcptools.online
+#         service: http://127.0.0.1:3400
+# 2b. Tạo DNS route cho tunnel mini (UUID 654e9432-…):
+#       cloudflared tunnel route dns 654e9432-511a-48d9-af45-2cb804226acb atrack.kntmcptools.online
+# 2c. Restart cloudflared để nạp config (vd: launchctl kickstart -k gui/$(id -u)/com.cloudflared … )
+
+# 3. (Auto-update) forward approval_instance event sang :3400/event — xem mục Tích hợp
 ```
 
-```javascript
-// pages/approval.jsx
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+**Env:**
+- `PORT` — port local server nghe (mặc định `3400`). Phải khớp target trong tunnel ingress.
+- `TRACK_BASE_URL` — host public gắn vào nút card (mặc định `https://atrack.kntmcptools.online`).
 
-export default function ApprovalDetail() {
-  const params = useSearchParams()
-  const instanceId = params.get('id')
-  const [data, setData] = useState(null)
+**Profile lark-cli cần có:** `tenant2` (KAI — đọc Approval) + `cli_a80df38cc639d02f` (writer-app tenant 1 — bot DM nhân viên). Cả hai đã dùng sẵn ở `dxc-approval` / `hr-approval`.
 
-  useEffect(() => {
-    fetch(`/api/approval/${instanceId}`)
-      .then(r => r.json())
-      .then(setData)
-  }, [instanceId])
+---
 
-  // Render timeline UI
-}
+## 🚀 Dùng
+
+### Gửi card cho 1 nhân viên (CLI)
+```bash
+# <instance_code> lấy từ field Instance (bảng 57) hoặc 1A_InstanceCode (bảng 35V2)
+# <to> = open_id (ou_…) / user_id / email / chat_id (oc_…) của nhân viên trên tenant 1
+node tracking-ui/send.js 9F1B…-UUID ou_abc123 dxc
+node tracking-ui/send.js 9F1B…-UUID info.khoa@isuccess.vn        # sys auto theo approval_code
+```
+
+### Gửi qua HTTP
+```bash
+curl -X POST http://127.0.0.1:3400/send \
+  -H 'Content-Type: application/json' \
+  -d '{"instance":"9F1B…-UUID","to":"ou_abc123","sys":"dxc"}'
+# → { ok, message_id, track_url }
+```
+
+### Xem giao diện ngay (demo)
+```
+https://atrack.kntmcptools.online/track?instance=DEMO
 ```
 
 ---
 
-## 8. Cấu trúc file dự án
+## 🔌 Tích hợp với server có sẵn (auto-send + auto-patch)
 
+### A. Tự gửi card cho nhân viên ngay sau khi push
+Trong `push.js` (HR) / sau bước writeback của `push_batch.py` (DXC), gọi `/send` với `instance_code` vừa tạo và `open_id` nhân viên:
+
+```js
+// sau khi có instance_code + open_id nhân viên (resolve từ Requester / bảng 20 NS)
+http.request({ host:'127.0.0.1', port:3400, path:'/send', method:'POST',
+  headers:{'Content-Type':'application/json'} },
+).end(JSON.stringify({ instance: instanceCode, to: employeeOpenId, sys: 'hr' }));
 ```
-lark-approval-tracking/
-├── frontend/
-│   ├── components/
-│   │   ├── LarkCard.jsx        # Interactive card mockup
-│   │   ├── H5Detail.jsx        # H5 detail panel
-│   │   ├── StepTimeline.jsx    # Timeline steps
-│   │   ├── ProgressBar.jsx     # Progress bar
-│   │   └── StatusTag.jsx       # Status badge
-│   ├── tokens/
-│   │   └── lark.js             # Design tokens L{}
-│   └── pages/
-│       └── approval.jsx        # H5 page
-├── backend/
-│   ├── main.py                 # FastAPI app
-│   ├── webhook.py              # Webhook handler
-│   ├── lark_api.py             # Lark API client
-│   └── card_builder.py        # Build card JSON
-└── card-templates/
-    └── approval-card.json      # Lark card JSON template
+
+### B. Tự cập nhật card khi status đổi
+Hai server hiện đã nhận `approval_instance` event (HR `:3100/event`, forward DXC `:3200/event`). Thêm 1 dòng **forward sang tracking** để card tự patch — không đụng logic cũ:
+
+```js
+// trong handler /event, sau khi updateStatus(...) — fire-and-forget:
+require('http').request({ host:'127.0.0.1', port:3400, path:'/event', method:'POST',
+  headers:{'Content-Type':'application/json'} }).end(JSON.stringify(body));
 ```
+
+> `server.js /event` tự bỏ qua instance chưa từng gửi card (`store.json` không có) nên an toàn khi forward tất cả event.
 
 ---
 
-## 9. Bước tiếp theo
+## 🤖 Tự động gửi card sau khi đơn lên Approval (Base Automation)
 
-- [ ] Setup Lark App tại [open.larksuite.com](https://open.larksuite.com) → lấy App ID + Secret
-- [ ] Cấu hình webhook endpoint cho event `approval_instance`
-- [ ] Deploy backend (FastAPI) + expose qua Cloudflare Tunnel (port hiện tại: 18790)
-- [ ] Build H5 page → deploy → cấu hình URL trong Lark App
-- [ ] Test end-to-end: tạo approval → bot gửi card → approver duyệt → card tự update
+Card gửi qua **custom-bot webhook** (vào group), không cần bot publish. Endpoint `POST /track/push` tự build card + bắn webhook (chống gửi trùng multi-K bằng `store.json`).
+
+**Lark Base Automation trên bảng 57 (CFM411):**
+1. **Trigger:** `When a record is updated` · field `Status 1` · điều kiện `Status 1` = `Pending` (ngay sau khi push xong, `Instance` đã ghi về).
+2. **Action:** `Send HTTP request`
+   - URL: `https://atrack.kntmcptools.online/track/push` (để nguyên, **không** thêm chữ `POST` ở đầu)
+   - Method `POST` · Header `Content-Type: application/json`
+   - Body: `{"instance":"{Instance}","webhook":"https://open.larksuite.com/open-apis/bot/v2/hook/…"}`
+
+> Webhook truyền trong **body** (giữ trong Base của bạn, server không lưu secret). Nếu muốn body chỉ cần `{"instance":"{Instance}"}` thì nhúng `TRACK_WEBHOOK` vào env launchd (kém an toàn hơn).
+> Báo kết quả cuối: thêm automation 2 — trigger `Status 1` = `Approved`/`Rejected`, Body thêm `"force":true` (webhook không sửa card cũ → gửi card mới).
+
+## 🔒 Đóng gói chạy nền (launchd)
+
+Server đang chạy `nohup` → mất khi mini reboot. Đóng gói launchd (tự bật lại) **trên mini**:
+
+```bash
+bash ~/tracking-ui/install-launchd.sh          # PORT/TRACK_BASE_URL mặc định, KHÔNG nhúng webhook
+# (tuỳ chọn nhúng webhook vào env để body chỉ cần {instance}):
+# TRACK_WEBHOOK='https://open.larksuite.com/open-apis/bot/v2/hook/…' bash ~/tracking-ui/install-launchd.sh
+```
+Quản: `launchctl kickstart -k gui/$(id -u)/com.approval-tracking.server` · log `tail -f ~/tracking-ui/server.log`.
 
 ---
 
-*Tài liệu này đi kèm file `approval-tracking.jsx` — React mockup đầy đủ của cả 2 component.*
+## 🎨 Lark Design Tokens (H5 + card)
+
+### Màu
+| Token | Hex | Dùng cho |
+|---|---|---|
+| `primary` | `#1456F0` | Button, link, progress bar, header card |
+| `success` | `#1CB87E` | Đã duyệt |
+| `warn` | `#FF8800` | Đang duyệt |
+| `danger` | `#F54A45` | Từ chối |
+| `neutral9…1` | `#1F2329` → `#F9FAFB` | Text, label, border, background |
+| Desktop bg | `#E8ECF2` | Nền tổng thể |
+
+Typography: `'PingFang SC','SF Pro Text',-apple-system,…` · radius 8/12 · shadow `0 2px 8px rgba(31,35,41,.10)`.
+
+### Status map
+| status | Label | Màu | H5 icon | Card icon | Header card |
+|---|---|---|---|---|---|
+| `approved` | Đã duyệt | `#1CB87E` | ✓ polyline | 🟢 | green |
+| `in_progress` | Đang duyệt | `#FF8800` | ••• (anim) | 🟡 | blue |
+| `rejected` | Từ chối | `#F54A45` | ✕ | 🔴 | red |
+| `pending` | Chờ duyệt | `#8F959E` | số cấp | ⚪️ | — |
+| `canceled` | Đã hủy | `#8F959E` | ✕ | — | grey |
+
+Card không vẽ được progress bar HTML → dùng dải emoji `🟩🟩🟨⬜️` + list từng cấp. Bản giàu (timeline, animated dot, comment expand) nằm ở **H5 page**.
+
+---
+
+## 🐛 Lưu ý
+
+| Vấn đề | Ghi chú |
+|---|---|
+| Tên người duyệt ra `Người duyệt cấp N` | `contact/v3/users` chưa resolve (open_id lạ / cache rỗng) — sẽ tự fill khi gọi được API |
+| Card không tự update | Chưa forward event sang `:3400/event`, hoặc instance gửi trước khi có `store.json` |
+| `track?instance=…` lỗi tải | Tunnel chưa expose 3400, hoặc instance_code sai/đã xóa |
+| Ngày lệch 7h | `fmtTime` giữ local ICT `+07:00` — không convert UTC (giống push.js) |
+| H5 lộ thông tin với ai có link | Tool nội bộ; hardening: thêm Lark JSAPI auth (`@larksuite/web-sdk`) kiểm tra user trước khi render |
+| Multi-K (DXC) | 1 instance = 1 card; gửi cho người đề xuất của LC đó |
+
+---
+
+*Mockup thiết kế gốc: `approval-tracking.jsx` (render bằng React). Bản chạy thật ở trên dùng `public/track.html` (vanilla) cùng design tokens.*
