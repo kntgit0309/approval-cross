@@ -2,7 +2,11 @@
 
 Bridge giữa **Lark Base** trên tenant iSuccess (1) và **Lark Approval** trên tenant iSuccess 2 KAI (2). Hỗ trợ submit form, sync status hai chiều, ghi data về Base.
 
-Gồm 2 hệ thống độc lập (cùng pattern):
+Gồm 2 hệ thống độc lập (cùng pattern) + 1 UI mockup tracking:
+
+- 📂 **[hr-approval/](./hr-approval/)** — HR đơn xin phép/nghỉ việc/OT
+- 📂 **[dxc-approval/](./dxc-approval/)** — Đề Xuất Chi (multi-K, attachment)
+- 📂 **[tracking-ui/](./tracking-ui/)** — React mockup + design doc cho Interactive Card + H5 Detail panel (theme Lark)
 
 | | [HR Approval](./hr-approval/) | [DXC Approval](./dxc-approval/) |
 |---|---|---|
