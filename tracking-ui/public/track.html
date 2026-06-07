@@ -128,7 +128,7 @@ const STATUS = {
 };
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const qs = new URLSearchParams(location.search);
-const instance = qs.get('instance') || qs.get('id') || 'DEMO';
+const instance = (qs.get('instance') || qs.get('id') || '').trim();
 const sys = qs.get('sys') || '';
 
 function avatar(initials,color,size,url){
@@ -266,10 +266,14 @@ function fail(msg){
     </div>`;
 }
 
-fetch(`/track/data?instance=${encodeURIComponent(instance)}${sys?'&sys='+encodeURIComponent(sys):''}`)
-  .then(r=>r.json())
-  .then(d=>{ if(d.error) return fail(d.error); render(d); })
-  .catch(e=>fail('Không tải được dữ liệu phê duyệt. '+e.message));
+if (!instance) {
+  fail('Không truy cập được — link thiếu mã đơn (instance). Kiểm tra lại automation: chèn field Instance của bản ghi đã có mã (không phải bản ghi trigger).');
+} else {
+  fetch(`/track/data?instance=${encodeURIComponent(instance)}${sys?'&sys='+encodeURIComponent(sys):''}`)
+    .then(r=>r.json())
+    .then(d=>{ if(d.error) return fail(d.error); render(d); })
+    .catch(e=>fail('Không tải được dữ liệu phê duyệt. '+e.message));
+}
 </script>
 </body>
 </html>

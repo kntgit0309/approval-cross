@@ -73,9 +73,10 @@ function postWebhook(webhookUrl, payload) {
   });
 }
 
-// Lấy canonical JSON: DEMO hoặc instance thật
+// Lấy canonical JSON: chỉ DEMO khi instance='DEMO'; rỗng → lỗi (KHÔNG fallback DEMO)
 function getCanonical(instanceCode, sys) {
-  if (!instanceCode || instanceCode === 'DEMO') return lib.DEMO;
+  if (instanceCode === 'DEMO') return lib.DEMO;
+  if (!instanceCode) throw new Error('thiếu mã đơn (instance)');
   const inst = lib.fetchInstance(instanceCode);
   return lib.normalize(inst, sys || lib.SYS_BY_CODE[inst.approval_code]);
 }
@@ -102,14 +103,14 @@ const server = http.createServer(async (req, res) => {
 
     // ── Canonical JSON cho H5 ──
     if (req.method === 'GET' && p === '/track/data') {
-      const code = u.searchParams.get('instance') || u.searchParams.get('id');
+      const code = (u.searchParams.get('instance') || u.searchParams.get('id') || '').trim();
       const sys = u.searchParams.get('sys') || '';
+      if (!code) return sendJson(res, 200, { error: 'Không truy cập được — thiếu mã đơn (instance).' });
       try {
-        const data = getCanonical(code, sys);
-        return sendJson(res, 200, data);
+        return sendJson(res, 200, getCanonical(code, sys));
       } catch (e) {
         log(`data err ${code}: ${e.message}`);
-        return sendJson(res, 200, { error: `Không tìm thấy/đọc được đề xuất (${code}).` });
+        return sendJson(res, 200, { error: `Không truy cập được — không đọc được đề xuất (${code}). Mã sai hoặc đơn đã xoá.` });
       }
     }
 
@@ -121,18 +122,24 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, lib.buildCard(data, trackUrlFor(code || 'DEMO', data.system)));
     }
 
-    // ── Gửi card cho nhân viên ──
+    // ── Gửi card P2P cho user (mặc định: requester của đơn) bằng bot BOT_PROFILE ──
     if (req.method === 'POST' && p === '/send') {
       const body = await readBody(req);
       const code = body.instance || body.instance_code;
-      const to = body.to || body.receive_id;
-      if (!code || !to) return sendJson(res, 400, { error: 'missing instance/to' });
+      if (!code) return sendJson(res, 400, { error: 'missing instance' });
+      const to = body.to || body.receive_id || lib.resolveRequester(code);
+      if (!to) return sendJson(res, 400, { error: 'không xác định được người nhận (truyền "to" hoặc đảm bảo bảng 57 có Requester open_id)' });
       const data = getCanonical(code, body.sys);
       const card = lib.buildCard(data, trackUrlFor(code, data.system));
-      const messageId = lib.sendCard(to, card);
-      const entry = lib.putSent(code, { message_id: messageId, receive_id: to, sys: data.system });
-      log(`sent ${code} → ${to} msg=${messageId}`);
-      return sendJson(res, 200, { ok: true, instance: code, message_id: messageId, track_url: trackUrlFor(code, data.system), entry });
+      try {
+        const messageId = lib.sendCard(to, card);
+        lib.putSent(code, { message_id: messageId, receive_id: to, sys: data.system });
+        log(`sent ${code} → ${to} msg=${messageId}`);
+        return sendJson(res, 200, { ok: true, instance: code, to, message_id: messageId });
+      } catch (e) {
+        log(`send err ${code} → ${to}: ${e.message}`);
+        return sendJson(res, 500, { error: e.message, instance: code, to });
+      }
     }
 
     // ── Auto-push card vào webhook (cho Lark Base Automation gọi) ──

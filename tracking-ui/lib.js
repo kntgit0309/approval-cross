@@ -22,7 +22,12 @@ const path = require('path');
 /* ─── Hằng số ─────────────────────────────────────────────────────────────── */
 const LARK = '/opt/homebrew/bin/lark-cli';
 const PROFILE_APPROVAL = 'tenant2';              // KAI — nơi chứa Approval instance
-const PROFILE_IM = 'cli_a80df38cc639d02f';       // writer-app tenant 1 iSuccess — bot DM cho nhân viên
+// Bot gửi tin nhắn cho user — đổi qua env BOT_PROFILE (profile lark-cli của bot publish DM được).
+// Mặc định cli_a80df... (writer-app) KHÔNG DM user được → set BOT_PROFILE sang bot của bạn.
+const PROFILE_IM = process.env.BOT_PROFILE || 'cli_a80df38cc639d02f';
+const PROFILE_BASE_T1 = 'cli_a80df38cc639d02f'; // đọc bảng 57 (tenant 1 iSuccess)
+const BASE_57 = 'RcX6wwhnZiJsQrkx7TPl9OlCglc';
+const TBL_57 = 'tblp36MD9kmWmZRO';
 const STORE_FILE = path.join(__dirname, 'store.json');
 const USERCACHE_FILE = path.join(__dirname, 'usercache.json');
 
@@ -145,6 +150,25 @@ function resolveUsers(ids, idType = 'open_id') {
   }
   if (dirty) saveJson(USERCACHE_FILE, cache);
   return out;
+}
+
+/* ─── Resolve open_id requester từ bảng 57 (để DM đúng người) ───────────── */
+function resolveRequester(instanceCode) {
+  try {
+    const body = { filter: { conjunction: 'and', conditions: [{ field_name: 'Instance', operator: 'is', value: [instanceCode] }] } };
+    const j = larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${BASE_57}/tables/${TBL_57}/records/search`, { params: { page_size: 1 }, data: body });
+    const items = (j.data && j.data.items) || [];
+    const req = items[0] && items[0].fields && items[0].fields['Requester'];
+    const r = Array.isArray(req) ? req[0] : req;
+    const openId = r && (r.id || r.open_id);
+    if (!openId) return null;
+    // open_id là per-app → đổi sang EMAIL (dùng chung mọi app) cho bot khác gửi được
+    try {
+      const u = larkApi(PROFILE_BASE_T1, 'GET', `/open-apis/contact/v3/users/${openId}`, { params: { user_id_type: 'open_id' } });
+      const usr = (u.data && u.data.user) || {};
+      return usr.email || usr.enterprise_email || openId;
+    } catch { return openId; }
+  } catch (e) { return null; }
 }
 
 /* ─── Fetch instance từ Approval [KAI] ──────────────────────────────────── */
@@ -441,7 +465,7 @@ function patchCard(messageId, card) {
 module.exports = {
   PROFILE_APPROVAL, PROFILE_IM, SYS_BY_CODE,
   fetchInstance, normalize, buildCard, DEMO,
-  sendCard, patchCard, receiveType,
+  resolveRequester, sendCard, patchCard, receiveType,
   getSent, putSent, resolveUsers,
   initials, avatarColor, fmtTime, nowStamp,
 };
