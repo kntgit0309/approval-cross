@@ -63,6 +63,7 @@ C2_KEYS = {
 
 # Phòng ban → tenant 2 open_id (mapped from observed instances)
 DEPT_MAP = {
+    'AI engineer':        'od-e65417caa016023c3ffccd0ce074f4d0',  # BU Dịch vụ — QL Khoa NHT.DES (dept_id 5d1efad186997758)
     'Purchasing.AMZ Eco': 'od-3be65c7752943973b956f22aa1fe2294',
     'Support.ZenE':       'od-9c433b6119f103bf6a1f271c4c50c0d6',
     'Support Account.ZenE':'od-9c433b6119f103bf6a1f271c4c50c0d6',
