@@ -1,0 +1,11 @@
+{
+  "name": "phase2-fanout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 2 — fan-out trạng thái duyệt cross-tenant tới đúng user (DM card). Token-manager 2 provider (ISV / custom) sau 1 interface get_tenant_token.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test",
+    "demo": "node demo.js"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "groups": [
+    { "key": "todo", "label": "To-do", "count": null },
+    { "key": "done", "label": "Done", "count": null },
+    { "key": "ccd", "label": "CC'd", "count": 4 },
+    { "key": "submitted", "label": "Submitted", "count": null }
+  ],
+  "items": [
+    { "id": "202604230026", "title": "Đơn xin phép - Test", "status": "rejected", "requester": "Admin iSuccess 2 (KAI)", "dept": "Designer", "type": "Nghỉ theo ca (Không lương)", "by": "Admin iSuccess 2 (KAI)", "processed": "04-23 17:04" },
+    { "id": "202604230032", "title": "Đơn xin phép - Test", "status": "rejected", "requester": "Admin iSuccess 2 (KAI)", "dept": "Designer", "type": "Nghỉ Thai sản (Lao động nữ)", "by": "Admin iSuccess 2 (KAI)", "processed": "04-23 10:32" },
+    { "id": "202604230031", "title": "Đơn xin phép - Test", "status": "rejected", "requester": "Admin iSuccess 2 (KAI)", "dept": "Designer", "type": "Nghỉ việc riêng không hưởng lương", "by": "Admin iSuccess 2 (KAI)", "processed": "04-23 10:31" }
+  ]
+}
