@@ -406,10 +406,10 @@ def push_one(dxc_id, dry_run=False):
     requester_name = requester.get('name','-')
     # Resolve dept: thử các nguồn theo priority, dùng nguồn ĐẦU TIÊN match DEPT_MAP
     _dept_candidates = [
-        fetch_user_dept(req_open_id),
         first(f.get('1L_Phòng ban 1 (auto)')),
         first(f.get('4F_Phòng ban')),
         first(f.get('Phòng ban 2 (manual)')),
+        fetch_user_dept(req_open_id),  # fallback cuối: phòng NS requester chỉ dùng khi đơn không có Phòng ban
     ]
     dept_name = next((c for c in _dept_candidates if c and DEPT_MAP.get(c)), None)
     if not dept_name:
