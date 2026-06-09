@@ -2,11 +2,11 @@
 
 Bridge giữa **Lark Base** trên tenant iSuccess (1) và **Lark Approval** trên tenant iSuccess 2 KAI (2). Hỗ trợ submit form, sync status hai chiều, ghi data về Base.
 
-Gồm 2 hệ thống độc lập (cùng pattern) + 1 UI mockup tracking:
+Gồm 2 hệ thống submit độc lập (cùng pattern) + 1 hệ tracking cho nhân viên:
 
 - 📂 **[hr-approval/](./hr-approval/)** — HR đơn xin phép/nghỉ việc/OT
 - 📂 **[dxc-approval/](./dxc-approval/)** — Đề Xuất Chi (multi-K, attachment)
-- 📂 **[tracking-ui/](./tracking-ui/)** — React mockup + design doc cho Interactive Card + H5 Detail panel (theme Lark)
+- 📂 **[tracking-ui/](./tracking-ui/)** — gửi nhân viên card theo dõi tiến độ duyệt nhiều cấp + H5 detail page; card tự cập nhật khi có người duyệt (chạy thật `:3300`, dùng chung HR + DXC)
 
 | | [HR Approval](./hr-approval/) | [DXC Approval](./dxc-approval/) |
 |---|---|---|
@@ -124,12 +124,18 @@ Trên bảng nguồn, tạo Automation:
 │   ├── README.md                  # Chi tiết flow HR
 │   ├── server.js                  # HTTP relay :3100
 │   └── push.js                    # Core push logic
-└── dxc-approval/                  # Hệ Đề Xuất Chi
-    ├── README.md                  # Chi tiết flow DXC
-    ├── server.js                  # HTTP relay :3200
-    ├── push_batch.py              # Core push + writeback + noti
-    ├── auto_push_hoan_ung.py      # Cron auto-push Hoàn ứng (nếu có)
-    └── sync_cong_no.py            # Sync bảng 210.6 công nợ
+├── dxc-approval/                  # Hệ Đề Xuất Chi
+│   ├── README.md                  # Chi tiết flow DXC
+│   ├── server.js                  # HTTP relay :3200
+│   ├── push_batch.py              # Core push + writeback + noti
+│   ├── auto_push_hoan_ung.py      # Cron auto-push Hoàn ứng (nếu có)
+│   └── sync_cong_no.py            # Sync bảng 210.6 công nợ
+└── tracking-ui/                   # Hệ tracking cho nhân viên (HR + DXC)
+    ├── README.md                  # Chi tiết flow + tích hợp
+    ├── server.js                  # Tracking server :3300 (H5 + data + send + patch)
+    ├── lib.js                     # Core: fetch/normalize/card/send
+    ├── send.js                    # CLI gửi card cho nhân viên
+    └── public/track.html          # H5 detail page (self-contained)
 ```
 
 ---

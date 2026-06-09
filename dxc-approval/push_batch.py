@@ -63,6 +63,7 @@ C2_KEYS = {
 
 # Phòng ban → tenant 2 open_id (mapped from observed instances)
 DEPT_MAP = {
+    'AI engineer':        'od-e65417caa016023c3ffccd0ce074f4d0',  # BU Dịch vụ — QL Khoa NHT.DES (dept_id 5d1efad186997758)
     'Purchasing.AMZ Eco': 'od-3be65c7752943973b956f22aa1fe2294',
     'Support.ZenE':       'od-9c433b6119f103bf6a1f271c4c50c0d6',
     'Support Account.ZenE':'od-9c433b6119f103bf6a1f271c4c50c0d6',
@@ -379,6 +380,18 @@ def push_one(dxc_id, dry_run=False):
     base_rid, base_dxc, base_f = siblings[0]
     if dxc_id != base_dxc:
         return {'dxc_id': dxc_id, 'status':'skipped', 'reason':f'push via base K={base_dxc} (multi-K)'}
+    # Chống race: 4F_Số tiền (formula) chưa settle ngay sau khi tạo record → đợi & đọc lại (max 30s)
+    if not dry_run and first(base_f.get('4F_Số tiền')) is None:
+        import time as _t
+        for _w in range(6):
+            _t.sleep(5)
+            _sib = fetch_lc_siblings(dxc_id)
+            if _sib:
+                siblings = _sib
+                base_rid, base_dxc, base_f = siblings[0]
+            if first(base_f.get('4F_Số tiền')) is not None:
+                print(json.dumps({'dxc_id': dxc_id, 'note': 'waited %ds for fields (race)' % ((_w + 1) * 5)}), file=sys.stderr)
+                break
     record_id_57 = base_rid
     f = base_f
     all_record_ids = [rid for rid, _, _ in siblings]
@@ -405,10 +418,10 @@ def push_one(dxc_id, dry_run=False):
     requester_name = requester.get('name','-')
     # Resolve dept: thử các nguồn theo priority, dùng nguồn ĐẦU TIÊN match DEPT_MAP
     _dept_candidates = [
-        fetch_user_dept(req_open_id),
         first(f.get('1L_Phòng ban 1 (auto)')),
         first(f.get('4F_Phòng ban')),
         first(f.get('Phòng ban 2 (manual)')),
+        fetch_user_dept(req_open_id),  # fallback cuối: phòng NS requester chỉ dùng khi đơn không có Phòng ban
     ]
     dept_name = next((c for c in _dept_candidates if c and DEPT_MAP.get(c)), None)
     if not dept_name:
