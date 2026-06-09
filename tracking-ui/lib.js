@@ -487,7 +487,7 @@ const TBL_20_NS = 'tbl0edSaPODwl2Ne';               // bảng 20 NS (cùng base 
 const STATUS_NORM = { approved: 'approved', done: 'approved', pending: 'in_progress', reverted: 'in_progress', 'under review': 'in_progress', rejected: 'rejected', canceled: 'canceled', deleted: 'canceled' };
 function normStatus(s) { return STATUS_NORM[String(s || '').toLowerCase()] || 'in_progress'; }
 function searchT1(base, table, body, pageSize) {
-  return larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params: { page_size: pageSize || 200 }, data: body || {} });
+  return larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params: { page_size: pageSize || 200 }, data: { automatic_fields: true, ...(body || {}) } });
 }
 function personName(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.name || o.en_name || ''; }
 function personId(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.id || o.open_id || ''; }
@@ -535,7 +535,7 @@ function listApprovals(viewerEmail, viewerName, limit) {
       const f = it.fields; const inst = asText(f['Instance']); if (!inst || seen.has(inst)) continue; seen.add(inst);
       const id = (asText(f['DXC-ID']) || '').replace(/K\d+$/, '');
       const amt = asText(f['4F_Số tiền']); const cur = asText(f['4F_Tiền tệ']) || 'VND';
-      items.push({ system: 'dxc', instance: inst, id, title: 'Đề Xuất Chi · ' + id, status: normStatus(asText(f['4L_Status của cả LC'])), requester: personName(f['Requester']), avatar: personAvatar(f['Requester']), initials: initials(personName(f['Requester']) || '?'), dept: asText(f['4F_Phòng ban']) || '—', sub: amt ? fmtAmount(Number(String(amt).replace(/[^\d.-]/g, '')), cur) : (asText(f['Mô tả Lô Chi']) || ''), time: asText(f['1F_Ngày giờ tạo (text)']) || '' });
+      items.push({ system: 'dxc', instance: inst, id, title: 'Đề Xuất Chi · ' + id, status: normStatus(asText(f['4L_Status của cả LC'])), requester: personName(f['Requester']), avatar: personAvatar(f['Requester']), initials: initials(personName(f['Requester']) || '?'), dept: asText(f['4F_Phòng ban']) || '—', sub: amt ? fmtAmount(Number(String(amt).replace(/[^\d.-]/g, '')), cur) : (asText(f['Mô tả Lô Chi']) || ''), time: Number(it.created_time) || 0 });
     }
   } catch (e) { /* skip */ }
   try { // HR table
@@ -543,10 +543,10 @@ function listApprovals(viewerEmail, viewerName, limit) {
     for (const it of (hr.data && hr.data.items || [])) {
       const f = it.fields; const inst = asText(f['1A_InstanceCode']); if (!inst) continue;
       const hrReq = personName(f['Requester']) || asText(f['4L_Họ và tên']) || '';
-      items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: hrReq, avatar: personAvatar(f['Requester']), initials: initials(hrReq || '?'), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: asText(f['Serial no.']) || '' });
+      items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: hrReq, avatar: personAvatar(f['Requester']), initials: initials(hrReq || '?'), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: Number(it.created_time) || 0 });
     }
   } catch (e) { /* skip */ }
-  items.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
+  items.sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0));   // mới nhất lên đầu (created_time ms)
   return { viewer: viewerEmail || null, resolved: openId, count: items.length, items: items.slice(0, limit) };
 }
 

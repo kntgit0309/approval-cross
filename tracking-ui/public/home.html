@@ -94,7 +94,7 @@
   var GROUPS = [['all','Tất cả','#8F959E'],['in_progress','Đang duyệt','#3370FF'],['approved','Đã duyệt','#2EA121'],['rejected','Từ chối','#D83931']];
   var DATA=[], FILTER='all', SEARCH='', CUR=null;
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function fmtT(t){t=String(t||'');var m=t.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);return m?(m[3]+'/'+m[2]+'/'+m[1].slice(2)+' '+m[4]+':'+m[5]):'';}
+  function fmtT(t){var n=Number(t);if(!n)return'';var d=new Date(n);if(isNaN(d.getTime()))return'';var p=function(x){return String(x).padStart(2,'0');};return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+String(d.getFullYear()).slice(2)+' '+p(d.getHours())+':'+p(d.getMinutes());}
   function pill(s){return '<span class="pill p-'+s+'">'+(STATUS[s]||s)+'</span>';}
   function avaColor(s){var p=['#1456F0','#1CB87E','#00AAFF','#FF8800','#8B5CF6','#F54A45','#14B8A6','#EC4899'];var h=0;s=String(s||'');for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return p[h%p.length];}
   function ava(it,sz){var ini=esc(it.initials||(it.requester||'?').slice(0,1).toUpperCase()),col=avaColor(it.requester||''),fs=Math.round(sz*0.42);var s='<span style="display:inline-flex;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';color:#fff;font-size:'+fs+'px;font-weight:600;align-items:center;justify-content:center;vertical-align:middle;position:relative;overflow:hidden;flex-shrink:0">'+ini;if(it.avatar)s+='<img src="'+esc(it.avatar)+'" referrerpolicy="no-referrer" onerror="this.remove()" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover"/>';return s+'</span>';}
