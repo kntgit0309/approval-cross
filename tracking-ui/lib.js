@@ -476,20 +476,30 @@ function personName(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o
 function personId(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.id || o.open_id || ''; }
 function personAvatar(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.avatar_url || o.avatar || null; }
 
-// Email công ty → open_id tenant1 (qua bảng 20 NS) — null nếu không thấy
-function resolveUserByEmail(email) {
-  if (!email) return null;
+function _emailRowOpenId(op, val) {
   try {
-    const j = searchT1(BASE_57, TBL_20_NS, { filter: { conjunction: 'and', conditions: [{ field_name: 'Email công ty', operator: 'is', value: [email] }] } }, 1);
+    const j = searchT1(BASE_57, TBL_20_NS, { filter: { conjunction: 'and', conditions: [{ field_name: 'Email công ty', operator: op, value: [val] }] } }, 1);
     const it = (j.data && j.data.items || [])[0];
     return it ? (personId(it.fields['User Lark']) || null) : null;
   } catch { return null; }
+}
+// Email công ty → open_id tenant1 (qua bảng 20 NS). Khớp email chính xác trước;
+// nếu trượt thì khớp theo LOCAL part (trước @) vì domain Lark login (isuccesscorp360.com)
+// khác domain HR trong bảng 20 (isuccesscorp.com) cho 1 số nhân sự.
+function resolveUserByEmail(email) {
+  if (!email) return null;
+  let oid = _emailRowOpenId('is', email);
+  if (oid) return oid;
+  const local = String(email).split('@')[0];
+  if (local && local.length >= 3) oid = _emailRowOpenId('contains', local + '@');
+  return oid || null;
 }
 
 // List đơn DXC + HR của 1 user (theo email). Không email → recent (demo).
 function listApprovals(viewerEmail, limit) {
   limit = limit || 60;
   const openId = viewerEmail ? resolveUserByEmail(viewerEmail) : null;
+  if (viewerEmail && !openId) return { viewer: viewerEmail, resolved: null, count: 0, items: [], note: 'email không khớp nhân sự trong bảng 20' };
   const reqCond = openId ? { filter: { conjunction: 'and', conditions: [{ field_name: 'Requester', operator: 'contains', value: [openId] }] } } : {};
   const items = [];
   try { // DXC bảng 57 (dedupe theo Instance)
