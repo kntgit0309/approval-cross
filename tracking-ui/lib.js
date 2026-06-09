@@ -369,7 +369,7 @@ function normalize(inst, sys) {
     type,
     amount: amount || null,
     summary,
-    submitter: { name: realName || '—', dept, time: submitterTime, initials: initials(realName || '?'), color: avatarColor(realName || idLabel) },
+    submitter: { name: realName || '—', dept, time: submitterTime, initials: initials(realName || '?'), color: avatarColor(realName || idLabel), avatar: (steps.find(s => s.name && realName && s.name === realName) || {}).avatar || null },
     tags,
     meta,
     steps,

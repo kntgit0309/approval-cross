@@ -69,7 +69,7 @@ const PILL = {
   canceled:{c:'var(--n6)',b:'var(--n2)'}, submitted:{c:'var(--green)',b:'var(--greenBg)'},
 };
 function pill(status, text){ const s=PILL[status]||PILL.pending; return '<span class="pill" style="color:'+s.c+';background:'+s.b+'">'+(text||OVERALL[status]||status)+'</span>'; }
-function avatar(initials, color, size){ size=size||24; return '<span class="ava" style="width:'+size+'px;height:'+size+'px;font-size:'+Math.round(size*0.42)+'px;background:'+(color||'#3370FF')+'">'+(initials||'?')+'</span>'; }
+function avatar(initials, color, size, url){ size=size||24; var h='<span class="ava" style="width:'+size+'px;height:'+size+'px;font-size:'+Math.round(size*0.42)+'px;background:'+(color||'#3370FF')+';position:relative;overflow:hidden">'+(initials||'?'); if(url) h+='<img src="'+url+'" referrerpolicy="no-referrer" onerror="this.remove()" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover">'; return h+'</span>'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 function render(d){
@@ -77,13 +77,13 @@ function render(d){
   const chips = (d.tags||[]).map(t=>'<span class="chip">'+esc(t.label)+'</span>').join('');
 
   // Prepend dòng Submit (như Lark native) + các step duyệt
-  const submitRow = '<tr><td class="col-step">Submit</td><td><div class="appr">'+avatar(d.submitter.initials,d.submitter.color,28)
+  const submitRow = '<tr><td class="col-step">Submit</td><td><div class="appr">'+avatar(d.submitter.initials,d.submitter.color,28,d.submitter.avatar)
     + '<span>'+esc(d.submitter.name)+'</span></div></td><td>'+pill('submitted','Submitted')+'</td><td></td>'
     + '<td class="col-time">'+esc(d.submitter.time||'')+'</td></tr>';
   const stepRows = (d.steps||[]).map(s=>{
     const result = pill(s.status, s.status==='in_progress'?'Đang duyệt':OVERALL[s.status]);
     return '<tr><td class="col-step">'+esc(s.role)+'</td>'
-      + '<td><div class="appr">'+avatar(s.initials,s.color,28)+'<span>'+esc(s.name)+'</span></div></td>'
+      + '<td><div class="appr">'+avatar(s.initials,s.color,28,s.avatar)+'<span>'+esc(s.name)+'</span></div></td>'
       + '<td>'+result+'</td><td>'+esc(s.comment||'')+'</td><td class="col-time">'+esc(s.time||'')+'</td></tr>';
   }).join('');
 
@@ -93,7 +93,7 @@ function render(d){
     '<div class="topbar"><span>No. '+esc(d.serial||d.id)+'</span><span class="icons">'+closeX+'</span></div>'
     + '<div class="h-title"><h1>'+esc(d.title)+'</h1>'+pill(d.status, OVERALL[d.status])+'</div>'
     + (chips?'<div class="chips">'+chips+'</div>':'')
-    + '<div class="sub-line">'+avatar(d.submitter.initials,d.submitter.color,22)+'<span class="nm">'+esc(d.submitter.name)+'</span>'
+    + '<div class="sub-line">'+avatar(d.submitter.initials,d.submitter.color,22,d.submitter.avatar)+'<span class="nm">'+esc(d.submitter.name)+'</span>'
       + (d.submitter.dept?'<span>'+esc(d.submitter.dept)+'</span>':'')+'<span class="sep">|</span><span>Submitted: '+esc(d.submitter.time||'')+'</span></div>'
     + '<div class="tabs"><div class="tab active" onclick="jump(\'s-d\')">Details</div>'
       + '<div class="tab" onclick="jump(\'s-r\')">Approval Record</div><div class="tab" onclick="jump(\'s-c\')">Comments</div></div>'
