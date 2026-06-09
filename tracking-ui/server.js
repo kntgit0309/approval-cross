@@ -144,8 +144,9 @@ const server = http.createServer(async (req, res) => {
 
     // ── SSO 免登: app_id cho page + đổi authCode → email viewer ──
     if (req.method === 'GET' && p === '/track/auth/start') {
-      const org = u.searchParams.get('org') || sso.defaultOrg;
-      return sendJson(res, 200, { configured: sso.configured, org, appId: sso.appIdFor(org), orgs: sso.orgs() });
+      const apps = {};
+      sso.orgs().forEach(o => { apps[o] = sso.appIdFor(o); });
+      return sendJson(res, 200, { configured: sso.configured, defaultOrg: sso.defaultOrg, apps });
     }
     if (req.method === 'GET' && p === '/track/auth') {
       const code = (u.searchParams.get('code') || '').trim();

@@ -147,28 +147,30 @@
     }).catch(function(e){document.getElementById('listBody').innerHTML='<div class="failmsg">Lỗi tải: '+esc(e.message)+'</div>';});
   }
   function dbg(m){ try{ fetch('/track/ssolog?m='+encodeURIComponent(m)); }catch(e){} }
-  function authWithTt(appId,n){
-    if(window.tt&&window.tt.requestAuthCode){
-      dbg('requestAuthCode n='+n);
-      window.tt.requestAuthCode({appId:appId,
-        success:function(res){dbg('code OK');fetch('/track/auth?code='+encodeURIComponent(res.code)+'&org='+encodeURIComponent(ORG)).then(function(r){return r.json();}).then(function(v){dbg('email='+(v.email||'NONE')+' src='+v.source+(v.error?' err='+v.error:''));loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
-        fail:function(err){dbg('authCode FAIL '+JSON.stringify(err).slice(0,140));loadList(EMAIL);}});
-    }else if(n<30){ setTimeout(function(){authWithTt(appId,n+1);},150); }   // poll chờ tt ~4.5s
-    else{ dbg('tt never ready'); loadList(EMAIL); }
+  // Thử requestAuthCode lần lượt từng org (sai org fail 10228 nhanh) → khỏi phụ thuộc ?org=
+  function tryOrgs(apps,orgList,i){
+    if(i>=orgList.length){ dbg('het org → fallback'); loadList(EMAIL); return; }
+    var o=orgList[i], appId=apps[o];
+    if(!appId||!(window.tt&&window.tt.requestAuthCode)){ tryOrgs(apps,orgList,i+1); return; }
+    dbg('try org='+o);
+    window.tt.requestAuthCode({appId:appId,
+      success:function(res){ dbg('code OK org='+o); fetch('/track/auth?code='+encodeURIComponent(res.code)+'&org='+o).then(function(r){return r.json();}).then(function(v){ dbg('email='+(v.email||'NONE')+' src='+v.source+' org='+o); loadList(v.email||EMAIL,v.name); }).catch(function(){ loadList(EMAIL); }); },
+      fail:function(err){ dbg('org='+o+' FAIL '+JSON.stringify(err).slice(0,90)); tryOrgs(apps,orgList,i+1); }});
   }
   function startSSO(){
-    setTimeout(function(){if(!loaded){dbg('TIMEOUT fallback');loadList(EMAIL);}},8000);
-    dbg('start h5sdk='+(!!window.h5sdk)+' tt0='+(!!window.tt));
-    if(window.h5sdk&&window.h5sdk.ready){
-      try{window.h5sdk.error(function(e){dbg('h5sdk.error '+JSON.stringify(e).slice(0,120));});}catch(e){}
-      window.h5sdk.ready(function(){
-        dbg('ready tt='+(!!window.tt));
-        fetch('/track/auth/start?org='+encodeURIComponent(ORG)).then(function(r){return r.json();}).then(function(cfg){
-          if(!cfg.appId){dbg('no appId org='+ORG);loadList(EMAIL);return;}
-          authWithTt(cfg.appId,0);
-        }).catch(function(){dbg('cfg err');loadList(EMAIL);});
-      });
-    }else{ dbg('no h5sdk fallback'); loadList(EMAIL); }
+    setTimeout(function(){if(!loaded){dbg('TIMEOUT');loadList(EMAIL);}},12000);
+    dbg('start h5sdk='+(!!window.h5sdk));
+    if(!(window.h5sdk&&window.h5sdk.ready)){ dbg('no h5sdk fallback'); loadList(EMAIL); return; }
+    try{window.h5sdk.error(function(e){dbg('h5sdk.error '+JSON.stringify(e).slice(0,100));});}catch(e){}
+    window.h5sdk.ready(function(){
+      dbg('ready tt='+(!!window.tt));
+      fetch('/track/auth/start').then(function(r){return r.json();}).then(function(cfg){
+        var apps=cfg.apps||{};
+        var orgList = ORG ? [ORG] : Object.keys(apps);   // ?org= ưu tiên; không có thì thử hết
+        if(!orgList.length){ dbg('no apps'); loadList(EMAIL); return; }
+        tryOrgs(apps, orgList, 0);
+      }).catch(function(){ dbg('cfg err'); loadList(EMAIL); });
+    });
   }
   if(EMAIL)loadList(EMAIL);else startSSO();
 </script>
