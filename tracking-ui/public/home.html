@@ -95,6 +95,8 @@
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function fmtT(t){t=String(t||'');var m=t.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);return m?(m[3]+'/'+m[2]+'/'+m[1].slice(2)+' '+m[4]+':'+m[5]):'';}
   function pill(s){return '<span class="pill p-'+s+'">'+(STATUS[s]||s)+'</span>';}
+  function avaColor(s){var p=['#1456F0','#1CB87E','#00AAFF','#FF8800','#8B5CF6','#F54A45','#14B8A6','#EC4899'];var h=0;s=String(s||'');for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return p[h%p.length];}
+  function ava(it,sz){var ini=esc(it.initials||(it.requester||'?').slice(0,1).toUpperCase()),col=avaColor(it.requester||''),fs=Math.round(sz*0.42);var s='<span style="display:inline-flex;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';color:#fff;font-size:'+fs+'px;font-weight:600;align-items:center;justify-content:center;vertical-align:middle;position:relative;overflow:hidden;flex-shrink:0">'+ini;if(it.avatar)s+='<img src="'+esc(it.avatar)+'" referrerpolicy="no-referrer" onerror="this.remove()" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover"/>';return s+'</span>';}
   function visible(){return DATA.filter(function(it){
     if(FILTER!=='all' && it.status!==FILTER) return false;
     if(SEARCH){var h=((it.title||'')+' '+(it.id||'')+' '+(it.requester||'')+' '+(it.dept||'')+' '+(it.sub||'')).toLowerCase();if(h.indexOf(SEARCH)<0)return false;}
@@ -116,7 +118,7 @@
       return '<div class="card'+(CUR===it.instance?' active':'')+'" id="c-'+esc(it.instance)+'" onclick="openItem(\''+esc(it.instance)+'\',\''+it.system+'\')">'
         +'<div class="card-top"><span class="ttl">'+esc(it.title)+'</span>'+pill(it.status)+'</div>'
         +(it.sub?'<div class="card-row"><span class="k">'+(it.system==='dxc'?'Số tiền':'Loại')+':&nbsp;</span><span class="v" style="font-weight:600">'+esc(it.sub)+'</span></div>':'')
-        +'<div class="card-row"><span class="k">Người gửi:&nbsp;</span><span class="v">'+esc(it.requester||'—')+'</span></div>'
+        +'<div class="card-row" style="align-items:center"><span class="k">Người gửi:&nbsp;</span>'+ava(it,18)+'<span class="v" style="margin-left:6px">'+esc(it.requester||'—')+'</span></div>'
         +'<div class="card-row"><span class="k">Phòng ban:&nbsp;</span><span class="v">'+esc(it.dept)+'</span></div>'
         +'<div class="card-foot"><span class="sys '+it.system+'">'+(it.system==='dxc'?'Đề xuất chi':'HR')+'</span>'+(t?'<span>'+t+'</span>':'')+'<span style="margin-left:auto;color:var(--blue)">Chi tiết ›</span></div>'
         +'</div>';
@@ -143,19 +145,29 @@
       if(window.innerWidth>720){var first=visible()[0];if(first)openItem(first.instance,first.system);}
     }).catch(function(e){document.getElementById('listBody').innerHTML='<div class="failmsg">Lỗi tải: '+esc(e.message)+'</div>';});
   }
+  function dbg(m){ try{ fetch('/track/ssolog?m='+encodeURIComponent(m)); }catch(e){} }
+  function authWithTt(appId,n){
+    if(window.tt&&window.tt.requestAuthCode){
+      dbg('requestAuthCode n='+n);
+      window.tt.requestAuthCode({appId:appId,
+        success:function(res){dbg('code OK');fetch('/track/auth?code='+encodeURIComponent(res.code)).then(function(r){return r.json();}).then(function(v){dbg('email='+(v.email||'NONE')+' src='+v.source+(v.error?' err='+v.error:''));loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
+        fail:function(err){dbg('authCode FAIL '+JSON.stringify(err).slice(0,140));loadList(EMAIL);}});
+    }else if(n<30){ setTimeout(function(){authWithTt(appId,n+1);},150); }   // poll chờ tt ~4.5s
+    else{ dbg('tt never ready'); loadList(EMAIL); }
+  }
   function startSSO(){
-    setTimeout(function(){if(!loaded)loadList(EMAIL);},4500);   // fallback nếu 免登 không phản hồi
+    setTimeout(function(){if(!loaded){dbg('TIMEOUT fallback');loadList(EMAIL);}},8000);
+    dbg('start h5sdk='+(!!window.h5sdk)+' tt0='+(!!window.tt));
     if(window.h5sdk&&window.h5sdk.ready){
-      try{window.h5sdk.error(function(){});}catch(e){}
+      try{window.h5sdk.error(function(e){dbg('h5sdk.error '+JSON.stringify(e).slice(0,120));});}catch(e){}
       window.h5sdk.ready(function(){
+        dbg('ready tt='+(!!window.tt));
         fetch('/track/auth/start').then(function(r){return r.json();}).then(function(cfg){
-          if(!cfg.appId||!window.tt){loadList(EMAIL);return;}
-          window.tt.requestAuthCode({appId:cfg.appId,
-            success:function(res){fetch('/track/auth?code='+encodeURIComponent(res.code)).then(function(r){return r.json();}).then(function(v){loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
-            fail:function(){loadList(EMAIL);}});
-        }).catch(function(){loadList(EMAIL);});
+          if(!cfg.appId){dbg('no appId');loadList(EMAIL);return;}
+          authWithTt(cfg.appId,0);
+        }).catch(function(){dbg('cfg err');loadList(EMAIL);});
       });
-    }else{loadList(EMAIL);}
+    }else{ dbg('no h5sdk fallback'); loadList(EMAIL); }
   }
   if(EMAIL)loadList(EMAIL);else startSSO();
 </script>

@@ -136,6 +136,12 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Debug beacon từ client SSO (để soi log) ──
+    if (req.method === 'GET' && p === '/track/ssolog') {
+      log(`SSOLOG ${(u.searchParams.get('m') || '').slice(0, 220)}`);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ── SSO 免登: app_id cho page + đổi authCode → email viewer ──
     if (req.method === 'GET' && p === '/track/auth/start') {
       return sendJson(res, 200, { configured: sso.configured, appId: sso.appId || null });
