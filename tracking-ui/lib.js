@@ -239,6 +239,16 @@ function parseForm(formRaw) {
       }
       return [];
     },
+    // user_ids của widget contact (vd Requester): ["5865cd2e"] hoặc [{id}]
+    contactIds(...keys) {
+      const kk = keys.map(norm);
+      for (const w of flat) {
+        if (Array.isArray(w.value) && w.value.length && kk.some(k => norm(w.name).includes(k))) {
+          return w.value.map(v => (v && typeof v === 'object') ? (v.id || v.open_id) : v).filter(Boolean);
+        }
+      }
+      return [];
+    },
   };
 }
 
@@ -257,7 +267,14 @@ function normalize(inst, sys) {
   const overall = OVERALL[String(inst.status || '').toUpperCase()] || 'in_progress';
 
   // Người đề xuất thật (widget riêng — submitter native là Long admin proxy do cross-tenant)
-  const realName = f.pick('người đề xuất', 'nguoi de xuat', 'họ và tên', 'ho va ten') || null;
+  let realName = f.pick('người đề xuất', 'nguoi de xuat', 'họ và tên', 'ho va ten') || null;
+  let _subAvatar = null;
+  if (!realName) {   // đơn cũ không có widget tên → resolve từ widget Requester (user thật, bỏ qua Long proxy)
+    const _rids = f.contactIds('requester', 'người gửi');
+    if (_rids.length && _rids[0] !== 'e63f4f5d') {
+      try { const _ru = resolveUsers(_rids, /^ou_/.test(String(_rids[0])) ? 'open_id' : 'user_id'); const _u = _ru[_rids[0]]; if (_u) { realName = _u.name || realName; _subAvatar = _u.avatar || null; } } catch (e) {}
+    }
+  }
   const dept = f.pick('phòng ban', 'phong ban', 'department') || '—';
 
   // Steps từ task_list
@@ -369,7 +386,7 @@ function normalize(inst, sys) {
     type,
     amount: amount || null,
     summary,
-    submitter: { name: realName || '—', dept, time: submitterTime, initials: initials(realName || '?'), color: avatarColor(realName || idLabel), avatar: (steps.find(s => s.name && realName && s.name === realName) || {}).avatar || null },
+    submitter: { name: realName || '—', dept, time: submitterTime, initials: initials(realName || '?'), color: avatarColor(realName || idLabel), avatar: _subAvatar || (steps.find(s => s.name && realName && s.name === realName) || {}).avatar || null },
     tags,
     meta,
     steps,
@@ -525,7 +542,8 @@ function listApprovals(viewerEmail, viewerName, limit) {
     const hr = searchT1(HR_BASE_T1, HR_TBL, reqCond);
     for (const it of (hr.data && hr.data.items || [])) {
       const f = it.fields; const inst = asText(f['1A_InstanceCode']); if (!inst) continue;
-      items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: asText(f['4L_Họ và tên']) || personName(f['Requester']), avatar: personAvatar(f['Requester']), initials: initials((asText(f['4L_Họ và tên']) || personName(f['Requester'])) || '?'), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: asText(f['Serial no.']) || '' });
+      const hrReq = personName(f['Requester']) || asText(f['4L_Họ và tên']) || '';
+      items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: hrReq, avatar: personAvatar(f['Requester']), initials: initials(hrReq || '?'), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: asText(f['Serial no.']) || '' });
     }
   } catch (e) { /* skip */ }
   items.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
