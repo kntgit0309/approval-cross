@@ -361,6 +361,7 @@ function normalize(inst, sys) {
 
   return {
     instanceCode: inst.instance_code,
+    serial: inst.serial_number || null,   // = Request No. (số đơn hiển thị)
     id: idLabel,
     system: sys,
     status: overall,
