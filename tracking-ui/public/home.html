@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Approval Center — Đơn của tôi</title>
+<script type="text/javascript" src="https://lf-package-sg.larksuitecdn.com/obj/lark-static-sgsaas/lark/op/h5-js-sdk-1.5.44.js"></script>
 <style>
   :root{
     --blue:#3370FF; --blueHov:#245BDB; --blueBg:#EBF1FF;
@@ -131,12 +132,32 @@
   function setF(f){FILTER=f;renderNav();renderList();}
   window.setF=setF;window.openItem=openItem;window.closeDetail=closeDetail;
   document.getElementById('q').addEventListener('input',function(e){SEARCH=e.target.value.trim().toLowerCase();renderList();});
-  fetch('/track/list?email='+encodeURIComponent(EMAIL)).then(function(r){return r.json();}).then(function(d){
-    DATA=d.items||[];
-    document.getElementById('who').innerHTML='<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.6" stroke="#8F959E" stroke-width="1.3"/><path d="M3 13c0-2.4 2.2-4 5-4s5 1.6 5 4" stroke="#8F959E" stroke-width="1.3" stroke-linecap="round"/></svg><span>'+(d.viewer?esc(d.viewer)+(d.resolved?'':' (chưa khớp NS)'):'demo: đơn gần đây')+'</span>';
-    renderNav();renderList();
-    if(window.innerWidth>720){var first=visible()[0];if(first)openItem(first.instance,first.system);}
-  }).catch(function(e){document.getElementById('listBody').innerHTML='<div class="failmsg">Lỗi tải: '+esc(e.message)+'</div>';});
+  var loaded=false;
+  function loadList(email,name){
+    if(loaded)return;loaded=true;
+    fetch('/track/list?email='+encodeURIComponent(email||'')).then(function(r){return r.json();}).then(function(d){
+      DATA=d.items||[];
+      var lbl=name?esc(name):(d.viewer?esc(d.viewer)+(d.resolved?'':' (chưa khớp NS)'):'demo: đơn gần đây');
+      document.getElementById('who').innerHTML='<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.6" stroke="#8F959E" stroke-width="1.3"/><path d="M3 13c0-2.4 2.2-4 5-4s5 1.6 5 4" stroke="#8F959E" stroke-width="1.3" stroke-linecap="round"/></svg><span>'+lbl+'</span>';
+      renderNav();renderList();
+      if(window.innerWidth>720){var first=visible()[0];if(first)openItem(first.instance,first.system);}
+    }).catch(function(e){document.getElementById('listBody').innerHTML='<div class="failmsg">Lỗi tải: '+esc(e.message)+'</div>';});
+  }
+  function startSSO(){
+    setTimeout(function(){if(!loaded)loadList(EMAIL);},4500);   // fallback nếu 免登 không phản hồi
+    if(window.h5sdk&&window.h5sdk.ready){
+      try{window.h5sdk.error(function(){});}catch(e){}
+      window.h5sdk.ready(function(){
+        fetch('/track/auth/start').then(function(r){return r.json();}).then(function(cfg){
+          if(!cfg.appId||!window.tt){loadList(EMAIL);return;}
+          window.tt.requestAuthCode({appId:cfg.appId,
+            success:function(res){fetch('/track/auth?code='+encodeURIComponent(res.code)).then(function(r){return r.json();}).then(function(v){loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
+            fail:function(){loadList(EMAIL);}});
+        }).catch(function(){loadList(EMAIL);});
+      });
+    }else{loadList(EMAIL);}
+  }
+  if(EMAIL)loadList(EMAIL);else startSSO();
 </script>
 </body>
 </html>

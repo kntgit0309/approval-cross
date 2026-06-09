@@ -5,6 +5,7 @@ dxc-approval/public/
 auto_push_state.json
 tracking-ui/store.json
 tracking-ui/usercache.json
+tracking-ui/sso-config.json
 node_modules/
 __pycache__/
 *.pyc

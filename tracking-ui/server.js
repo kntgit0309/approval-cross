@@ -28,6 +28,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const lib = require('./lib');
+const sso = require('./sso');
 
 const PORT = process.env.PORT || 3400;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -132,6 +133,23 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         log(`list err: ${e.message}`);
         return sendJson(res, 200, { error: e.message, items: [] });
+      }
+    }
+
+    // ── SSO 免登: app_id cho page + đổi authCode → email viewer ──
+    if (req.method === 'GET' && p === '/track/auth/start') {
+      return sendJson(res, 200, { configured: sso.configured, appId: sso.appId || null });
+    }
+    if (req.method === 'GET' && p === '/track/auth') {
+      const code = (u.searchParams.get('code') || '').trim();
+      if (!code) return sendJson(res, 400, { error: 'missing code' });
+      try {
+        const v = await sso.resolveViewer(code);
+        log(`sso auth → ${v.email || '(no email)'} src=${v.source}`);
+        return sendJson(res, 200, v);
+      } catch (e) {
+        log(`sso err: ${e.message}`);
+        return sendJson(res, 200, { error: e.message, email: null });
       }
     }
 
