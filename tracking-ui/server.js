@@ -128,8 +128,9 @@ const server = http.createServer(async (req, res) => {
     // ── List đơn của user (cho trang chủ web app) ──
     if (req.method === 'GET' && p === '/track/list') {
       const email = (u.searchParams.get('email') || u.searchParams.get('u') || '').trim();
+      const name = (u.searchParams.get('name') || '').trim();
       try {
-        return sendJson(res, 200, lib.listApprovals(email || null));
+        return sendJson(res, 200, lib.listApprovals(email || null, name || null));
       } catch (e) {
         log(`list err: ${e.message}`);
         return sendJson(res, 200, { error: e.message, items: [] });

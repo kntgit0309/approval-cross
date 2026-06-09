@@ -476,30 +476,39 @@ function personName(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o
 function personId(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.id || o.open_id || ''; }
 function personAvatar(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.avatar_url || o.avatar || null; }
 
-function _emailRowOpenId(op, val) {
+function _rowOpenId(field, op, val) {
   try {
-    const j = searchT1(BASE_57, TBL_20_NS, { filter: { conjunction: 'and', conditions: [{ field_name: 'Email công ty', operator: op, value: [val] }] } }, 1);
+    const j = searchT1(BASE_57, TBL_20_NS, { filter: { conjunction: 'and', conditions: [{ field_name: field, operator: op, value: [val] }] } }, 1);
     const it = (j.data && j.data.items || [])[0];
     return it ? (personId(it.fields['User Lark']) || null) : null;
   } catch { return null; }
 }
-// Email công ty → open_id tenant1 (qua bảng 20 NS). Khớp email chính xác trước;
-// nếu trượt thì khớp theo LOCAL part (trước @) vì domain Lark login (isuccesscorp360.com)
-// khác domain HR trong bảng 20 (isuccesscorp.com) cho 1 số nhân sự.
+// open_id từ USERNAME Lark (4F_Tên User Lark) — CHUẨN NHẤT: SSO user_info.name = đúng
+// username này ("Ngọc NDB.SP"…). Ổn định hơn email (Email công ty bảng 20 hay lệch domain/hậu tố).
+function resolveUserByName(larkName) {
+  if (!larkName) return null;
+  return _rowOpenId('4F_Tên User Lark', 'contains', String(larkName).trim());
+}
+// Fallback: email (chỉ khớp chính xác + khác domain; KHÔNG khớp mờ vì dễ sai người).
 function resolveUserByEmail(email) {
   if (!email) return null;
-  let oid = _emailRowOpenId('is', email);
+  let oid = _rowOpenId('Email công ty', 'is', email);
   if (oid) return oid;
   const local = String(email).split('@')[0];
-  if (local && local.length >= 3) oid = _emailRowOpenId('contains', local + '@');
+  if (local && local.length >= 4) oid = _rowOpenId('Email công ty', 'contains', local + '@');
   return oid || null;
+}
+// Ưu tiên username Lark (chuẩn), fallback email
+function resolveViewerOpenId(email, name) {
+  return resolveUserByName(name) || resolveUserByEmail(email) || null;
 }
 
 // List đơn DXC + HR của 1 user (theo email). Không email → recent (demo).
-function listApprovals(viewerEmail, limit) {
+function listApprovals(viewerEmail, viewerName, limit) {
   limit = limit || 60;
-  const openId = viewerEmail ? resolveUserByEmail(viewerEmail) : null;
-  if (viewerEmail && !openId) return { viewer: viewerEmail, resolved: null, count: 0, items: [], note: 'email không khớp nhân sự trong bảng 20' };
+  const hasViewer = !!(viewerEmail || viewerName);
+  const openId = hasViewer ? resolveViewerOpenId(viewerEmail, viewerName) : null;
+  if (hasViewer && !openId) return { viewer: viewerName || viewerEmail, resolved: null, count: 0, items: [], note: 'không khớp nhân sự trong bảng 20' };
   const reqCond = openId ? { filter: { conjunction: 'and', conditions: [{ field_name: 'Requester', operator: 'contains', value: [openId] }] } } : {};
   const items = [];
   try { // DXC bảng 57 (dedupe theo Instance)
@@ -529,5 +538,5 @@ module.exports = {
   resolveRequester, sendCard, patchCard, receiveType,
   getSent, putSent, resolveUsers,
   initials, avatarColor, fmtTime, nowStamp,
-  listApprovals, resolveUserByEmail,
+  listApprovals, resolveUserByEmail, resolveUserByName, resolveViewerOpenId,
 };
