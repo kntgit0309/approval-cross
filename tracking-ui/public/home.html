@@ -89,6 +89,7 @@
 <script>
   var qs = new URLSearchParams(location.search);
   var EMAIL = (qs.get('email') || qs.get('u') || '').trim();
+  var ORG = (qs.get('org') || '').trim();   // set theo Home URL của từng app org (org2/org5)
   var STATUS = { approved:'Đã duyệt', in_progress:'Đang duyệt', rejected:'Từ chối', canceled:'Đã hủy' };
   var GROUPS = [['all','Tất cả','#8F959E'],['in_progress','Đang duyệt','#3370FF'],['approved','Đã duyệt','#2EA121'],['rejected','Từ chối','#D83931']];
   var DATA=[], FILTER='all', SEARCH='', CUR=null;
@@ -150,7 +151,7 @@
     if(window.tt&&window.tt.requestAuthCode){
       dbg('requestAuthCode n='+n);
       window.tt.requestAuthCode({appId:appId,
-        success:function(res){dbg('code OK');fetch('/track/auth?code='+encodeURIComponent(res.code)).then(function(r){return r.json();}).then(function(v){dbg('email='+(v.email||'NONE')+' src='+v.source+(v.error?' err='+v.error:''));loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
+        success:function(res){dbg('code OK');fetch('/track/auth?code='+encodeURIComponent(res.code)+'&org='+encodeURIComponent(ORG)).then(function(r){return r.json();}).then(function(v){dbg('email='+(v.email||'NONE')+' src='+v.source+(v.error?' err='+v.error:''));loadList(v.email||EMAIL,v.name);}).catch(function(){loadList(EMAIL);});},
         fail:function(err){dbg('authCode FAIL '+JSON.stringify(err).slice(0,140));loadList(EMAIL);}});
     }else if(n<30){ setTimeout(function(){authWithTt(appId,n+1);},150); }   // poll chờ tt ~4.5s
     else{ dbg('tt never ready'); loadList(EMAIL); }
@@ -162,8 +163,8 @@
       try{window.h5sdk.error(function(e){dbg('h5sdk.error '+JSON.stringify(e).slice(0,120));});}catch(e){}
       window.h5sdk.ready(function(){
         dbg('ready tt='+(!!window.tt));
-        fetch('/track/auth/start').then(function(r){return r.json();}).then(function(cfg){
-          if(!cfg.appId){dbg('no appId');loadList(EMAIL);return;}
+        fetch('/track/auth/start?org='+encodeURIComponent(ORG)).then(function(r){return r.json();}).then(function(cfg){
+          if(!cfg.appId){dbg('no appId org='+ORG);loadList(EMAIL);return;}
           authWithTt(cfg.appId,0);
         }).catch(function(){dbg('cfg err');loadList(EMAIL);});
       });

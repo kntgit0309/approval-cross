@@ -144,17 +144,19 @@ const server = http.createServer(async (req, res) => {
 
     // ── SSO 免登: app_id cho page + đổi authCode → email viewer ──
     if (req.method === 'GET' && p === '/track/auth/start') {
-      return sendJson(res, 200, { configured: sso.configured, appId: sso.appId || null });
+      const org = u.searchParams.get('org') || sso.defaultOrg;
+      return sendJson(res, 200, { configured: sso.configured, org, appId: sso.appIdFor(org), orgs: sso.orgs() });
     }
     if (req.method === 'GET' && p === '/track/auth') {
       const code = (u.searchParams.get('code') || '').trim();
+      const org = u.searchParams.get('org') || sso.defaultOrg;
       if (!code) return sendJson(res, 400, { error: 'missing code' });
       try {
-        const v = await sso.resolveViewer(code);
-        log(`sso auth → ${v.email || '(no email)'} src=${v.source}`);
+        const v = await sso.resolveViewer(code, org);
+        log(`sso auth(${org}) → ${v.email || '(no email)'} src=${v.source}`);
         return sendJson(res, 200, v);
       } catch (e) {
-        log(`sso err: ${e.message}`);
+        log(`sso err(${org}): ${e.message}`);
         return sendJson(res, 200, { error: e.message, email: null });
       }
     }
