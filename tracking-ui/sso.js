@@ -63,24 +63,25 @@ async function exchangeCode(code, org) {
 
 // open_id → email qua contact API (theo USER LARK, KHÔNG theo tên — tên dễ trùng/sai)
 async function emailByOpenId(openId, org) {
-  if (!openId) return null;
+  if (!openId) return { email: null, code: -1, msg: 'no openId' };
   const at = await appToken(org);
   const j = await reqJson('GET', '/open-apis/contact/v3/users/' + encodeURIComponent(openId) + '?user_id_type=open_id', null, { Authorization: 'Bearer ' + at });
   const usr = (j && j.data && j.data.user) || {};
-  return usr.email || usr.enterprise_email || null;
+  return { email: usr.email || usr.enterprise_email || null, code: j && j.code, msg: j && j.msg };
 }
 
-// authCode → { email, name, open_id, org, source }. Email lấy theo user Lark:
+// authCode → { email, name, open_id, org, source, dbg }. Email lấy theo user Lark:
 // user_info (chính chủ token) → nếu trống thì open_id→contact API. KHÔNG match theo tên.
 async function resolveViewer(code, org) {
   org = org || DEFAULT_ORG;
   const u = await exchangeCode(code, org);
   let email = u.email, source = 'user_info';
+  let dbg = 'uiEmail=' + (u.email ? 'Y' : 'N') + ' name=' + (u.name || '-') + ' oid=' + (u.open_id ? u.open_id.slice(0, 12) : '-');
   if (!email) {
-    try { email = await emailByOpenId(u.open_id, org); source = email ? 'contact_api' : 'none'; }
-    catch (e) { source = 'none'; }
+    try { const r = await emailByOpenId(u.open_id, org); email = r.email; dbg += ' contact=' + r.code + (r.msg ? '/' + String(r.msg).slice(0, 28) : ''); source = email ? 'contact_api' : 'none'; }
+    catch (e) { source = 'none'; dbg += ' contactErr=' + String(e.message).slice(0, 40); }
   }
-  return { email: email || null, name: u.name || null, open_id: u.open_id || null, org, source };
+  return { email: email || null, name: u.name || null, open_id: u.open_id || null, org, source, dbg };
 }
 
 module.exports = { resolveViewer, exchangeCode, appToken, appIdFor, orgs, defaultOrg: DEFAULT_ORG, configured: !!(CFG && CFG.apps && Object.keys(CFG.apps).length) };

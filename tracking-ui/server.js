@@ -154,7 +154,7 @@ const server = http.createServer(async (req, res) => {
       if (!code) return sendJson(res, 400, { error: 'missing code' });
       try {
         const v = await sso.resolveViewer(code, org);
-        log(`sso auth(${org}) → ${v.email || '(no email)'} src=${v.source}`);
+        log(`sso auth(${org}) → ${v.email || '(no email)'} src=${v.source} [${v.dbg || ''}]`);
         return sendJson(res, 200, v);
       } catch (e) {
         log(`sso err(${org}): ${e.message}`);
