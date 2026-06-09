@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Approval Center</title>
+<link rel="stylesheet" href="/detail.css" />
+<style>
+  html,body{height:100%;background:var(--white)}
+  .app{display:flex;height:100vh;overflow:hidden}
+  /* ── Sidebar ── */
+  .sidebar{width:230px;flex-shrink:0;border-right:1px solid var(--n3);background:var(--white);
+    display:flex;flex-direction:column;padding:14px 10px}
+  .search{display:flex;align-items:center;gap:8px;background:var(--n1);border:1px solid var(--n2);
+    border-radius:8px;padding:7px 10px;margin:4px 6px 14px}
+  .search input{border:none;background:none;outline:none;font-size:14px;flex:1;color:var(--n8);font-family:inherit}
+  .search input::placeholder{color:var(--n5)}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;
+    font-size:15px;color:var(--n8);font-weight:500;transition:background .12s}
+  .nav-item:hover{background:var(--n1)}
+  .nav-item.active{background:var(--blueBg);color:var(--blue)}
+  .nav-item .caret{color:var(--n5);width:10px;flex-shrink:0}
+  .nav-item .badge{margin-left:auto;font-size:13px;color:var(--n6)}
+  .nav-item.active .badge{color:var(--blue)}
+  /* ── List ── */
+  .list{width:380px;flex-shrink:0;border-right:1px solid var(--n3);background:var(--n1);
+    display:flex;flex-direction:column}
+  .list-head{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--n3);background:var(--white)}
+  .list-head .ft{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:600;color:var(--n9);cursor:pointer}
+  .list-head .sort{margin-left:auto;color:var(--n5);cursor:pointer}
+  .list-body{flex:1;overflow-y:auto;padding:12px}
+  .card{background:var(--white);border:1px solid var(--n3);border-radius:10px;padding:14px 16px;margin-bottom:12px;
+    cursor:pointer;transition:border-color .12s,box-shadow .12s}
+  .card:hover{box-shadow:0 2px 10px rgba(31,35,41,.07)}
+  .card.active{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
+  .card-top{display:flex;align-items:flex-start;margin-bottom:10px}
+  .card-top .ttl{font-size:15px;font-weight:600;color:var(--n9);flex:1;padding-right:8px}
+  .card-row{display:flex;font-size:13px;margin-bottom:5px;line-height:1.5}
+  .card-row .k{color:var(--n6);white-space:nowrap}
+  .card-row .v{color:var(--n8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card-foot{display:flex;align-items:center;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--n2);
+    font-size:12px;color:var(--n5)}
+  /* ── Detail pane ── */
+  .detail{flex:1;overflow-y:auto;background:var(--white)}
+  .detail .doc{max-width:920px;margin:0 auto;padding:24px 40px 40px;position:relative}
+  .empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--n5);font-size:14px}
+  @media(max-width:1100px){ .sidebar{width:64px} .sidebar .lbl,.search input,.nav-item .badge{display:none} }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#8F959E" stroke-width="1.4"/><path d="M11 11l3 3" stroke="#8F959E" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <input placeholder="Search" />
+    </div>
+    <div id="nav"></div>
+  </div>
+  <!-- List -->
+  <div class="list">
+    <div class="list-head">
+      <span class="ft">All Time <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="#646A73" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="sort"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M5 8h6M7 12h2" stroke="#8F959E" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+    </div>
+    <div class="list-body" id="listBody"></div>
+  </div>
+  <!-- Detail -->
+  <div class="detail" id="detail"><div class="empty">Chọn một đơn để xem chi tiết</div></div>
+</div>
+
+<script src="/detail-render.js"></script>
+<script>
+  const detailPane = document.getElementById('detail');
+  function navIcon(){ return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 6h11" stroke="currentColor" stroke-width="1.3"/></svg>'; }
+
+  function renderNav(groups, activeKey){
+    document.getElementById('nav').innerHTML = groups.map(g =>
+      '<div class="nav-item '+(g.key===activeKey?'active':'')+'" onclick="selectGroup(\''+g.key+'\')">'
+      + '<svg class="caret" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      + '<span style="color:var(--n5);display:flex">'+navIcon()+'</span>'
+      + '<span class="lbl">'+g.label+'</span>'
+      + (g.count!=null?'<span class="badge">'+g.count+'</span>':'')
+      + '</div>'
+    ).join('');
+  }
+  function selectGroup(key){ renderNav(DATA.groups, key); } // mock: chỉ đổi active
+
+  function renderList(items){
+    document.getElementById('listBody').innerHTML = items.map((it,i) =>
+      '<div class="card'+(i===0?' active':'')+'" id="card-'+it.id+'" onclick="openItem(\''+it.id+'\')">'
+      + '<div class="card-top"><span class="ttl">'+it.title+'</span>'+detailPill(it.status, 'Rejected')+'</div>'
+      + '<div class="card-row"><span class="k">Requester:&nbsp;</span><span class="v">'+it.requester+'</span></div>'
+      + '<div class="card-row"><span class="k">Phòng ban:&nbsp;</span><span class="v">'+it.dept+'</span></div>'
+      + '<div class="card-row"><span class="k">Loại đơn từ:&nbsp;</span><span class="v">'+it.type+'</span></div>'
+      + '<div class="card-foot">'+detailAvatar(it.by,18)+'<span>'+it.by+'  Processed: '+it.processed+'</span></div>'
+      + '</div>'
+    ).join('');
+  }
+
+  function openItem(id){
+    [...document.querySelectorAll('.card')].forEach(c=>c.classList.toggle('active', c.id==='card-'+id));
+    detailPane.innerHTML = '<div class="doc" id="doc"><div class="loading">Đang tải…</div></div>';
+    fetch('/api/instance/'+encodeURIComponent(id)).then(r=>r.json())
+      .then(d=>renderDetail(document.getElementById('doc'), d, { scrollEl: detailPane, onClose:()=>{
+          detailPane.innerHTML='<div class="empty">Chọn một đơn để xem chi tiết</div>';
+          [...document.querySelectorAll('.card')].forEach(c=>c.classList.remove('active'));
+        }}))
+      .catch(e=>{ detailPane.innerHTML='<div class="empty">Lỗi tải: '+e.message+'</div>'; });
+  }
+
+  let DATA = { groups:[], items:[] };
+  fetch('/api/instances').then(r=>r.json()).then(d=>{
+    DATA = d;
+    renderNav(d.groups, 'ccd');
+    renderList(d.items);
+    if(d.items[0]) openItem(d.items[0].id);
+  });
+</script>
+</body>
+</html>

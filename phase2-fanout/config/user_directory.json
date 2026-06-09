@@ -1,0 +1,7 @@
+{
+  "_comment": "business_id (email cty / SĐT / mã NV) bền của user → org nào (tenant_key) + cache open_id. Mỗi record submit Base phải mang business_id + tenant_key (plan §6). open_id_cache để trống → fan-out sẽ resolve qua batch_get_id rồi điền lại.",
+  "users": [
+    { "business_id": "nv001@isuccesscorp360.com", "tenant_key": "TENANT_ORG1", "open_id_cache": null },
+    { "business_id": "nv002@org2.com",            "tenant_key": "TENANT_ORG2", "open_id_cache": null }
+  ]
+}

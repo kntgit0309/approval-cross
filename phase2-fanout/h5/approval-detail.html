@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chi tiết phê duyệt</title>
+<link rel="stylesheet" href="/detail.css" />
+<style>
+  html,body{background:var(--n1)}
+  body{display:flex;justify-content:center}
+  .doc{width:100%;max-width:920px;background:var(--white);min-height:100vh;padding:24px 40px 40px;position:relative}
+</style>
+</head>
+<body>
+<div class="doc" id="doc"><div class="loading">Đang tải…</div></div>
+<script src="/detail-render.js"></script>
+<script>
+  const code = new URLSearchParams(location.search).get('instance') || 'demo';
+  fetch('/api/instance/'+encodeURIComponent(code)).then(r=>r.json())
+    .then(d=>renderDetail(document.getElementById('doc'), d, { scrollEl: window, onClose:()=>history.back() }))
+    .catch(e=>{ document.getElementById('doc').innerHTML='<div class="loading">Lỗi tải: '+e.message+'</div>'; });
+</script>
+</body>
+</html>

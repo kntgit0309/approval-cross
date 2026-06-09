@@ -1,0 +1,24 @@
+{
+  "id": "202604230026",
+  "rqId": "RQ031",
+  "title": "Đơn xin phép - Test",
+  "type": "Nghỉ theo ca (Không lương)",
+  "status": "rejected",
+  "submitter": { "name": "Admin iSuccess 2 (KAI)", "role": "Manager", "time": "Apr 23, 17:04" },
+  "fields": [
+    { "label": "RQ-ID", "value": "RQ031", "kind": "text" },
+    { "label": "Requester", "value": "Admin iSuccess 2 (KAI)", "kind": "user" },
+    { "label": "Người gửi", "value": "Nguyễn Hồ Trọng Khoa", "kind": "text" },
+    { "label": "Phòng ban", "value": "Designer", "kind": "dept" },
+    { "label": "Nhóm đơn từ", "value": "3. Nghỉ không lương", "kind": "text" },
+    { "label": "Loại đơn từ", "value": "Nghỉ theo ca (Không lương)", "kind": "text" },
+    { "label": "Lý do nghỉ 22", "value": "Test final 1", "kind": "text" },
+    { "label": "Ngày bắt đầu", "value": "2026-04-23 10:00", "kind": "text" }
+  ],
+  "steps": [
+    { "node": "Submit", "name": "Admin iSuccess 2 (KAI)", "status": "approved", "result": "Submitted", "time": "Apr 23, 17:04", "ago": "1 month ago", "comment": null },
+    { "node": "System", "sub": "Auto CC'd the successor", "name": "Admin iSuccess 2 (KAI)", "status": "cc", "result": "Auto cc'd", "time": "Apr 23, 17:04", "ago": "1 month ago", "comment": null },
+    { "node": "QL PB", "name": "Khoa NHT.AI", "status": "rejected", "result": "Rejected", "time": "Apr 23, 17:04", "ago": "1 month ago", "comment": null },
+    { "node": "End", "name": "System", "status": "done", "result": "Ended", "time": "Apr 23, 17:04", "ago": "1 month ago", "comment": null }
+  ]
+}

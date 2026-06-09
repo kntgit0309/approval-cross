@@ -1,0 +1,13 @@
+{
+  "_comment": "org_name → tenant_key (+ trạng thái cài app). Lấy tenant_key từ event cài app, header tenant_key trên event org bắn về, hoặc nhập tay. tenant_key giữ NGUYÊN hình dạng ở cả ISV lẫn custom (xem plan §4, §6).",
+  "orgs": [
+    { "org_name": "iSuccess",     "tenant_key": "TENANT_ORG1", "installed": true },
+    { "org_name": "iSuccess 2 KAI","tenant_key": "TENANT_ORG2", "installed": true },
+    { "org_name": "Org 3",         "tenant_key": "TENANT_ORG3", "installed": false },
+    { "org_name": "Org 4",         "tenant_key": "TENANT_ORG4", "installed": false },
+    { "org_name": "Org 5",         "tenant_key": "TENANT_ORG5", "installed": false },
+    { "org_name": "Org 6",         "tenant_key": "TENANT_ORG6", "installed": false },
+    { "org_name": "Org 7",         "tenant_key": "TENANT_ORG7", "installed": false },
+    { "org_name": "Org 8",         "tenant_key": "TENANT_ORG8", "installed": false }
+  ]
+}
