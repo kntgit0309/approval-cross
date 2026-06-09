@@ -462,10 +462,60 @@ function patchCard(messageId, card) {
   return true;
 }
 
+/* ─── List đơn theo user (trang chủ web app) ─────────────────────────────── */
+const HR_BASE_T1 = 'DLewbVqU7aZM65sAW6mlcOpngse';   // base HR (37.1.1)
+const HR_TBL = 'tblH5K1duVmQPmgO';
+const TBL_20_NS = 'tbl0edSaPODwl2Ne';               // bảng 20 NS (cùng base 57)
+const STATUS_NORM = { approved: 'approved', done: 'approved', pending: 'in_progress', reverted: 'in_progress', 'under review': 'in_progress', rejected: 'rejected', canceled: 'canceled', deleted: 'canceled' };
+function normStatus(s) { return STATUS_NORM[String(s || '').toLowerCase()] || 'in_progress'; }
+function searchT1(base, table, body, pageSize) {
+  return larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params: { page_size: pageSize || 200 }, data: body || {} });
+}
+function personName(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.name || o.en_name || ''; }
+function personId(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.id || o.open_id || ''; }
+
+// Email công ty → open_id tenant1 (qua bảng 20 NS) — null nếu không thấy
+function resolveUserByEmail(email) {
+  if (!email) return null;
+  try {
+    const j = searchT1(BASE_57, TBL_20_NS, { filter: { conjunction: 'and', conditions: [{ field_name: 'Email công ty', operator: 'is', value: [email] }] } }, 1);
+    const it = (j.data && j.data.items || [])[0];
+    return it ? (personId(it.fields['User Lark']) || null) : null;
+  } catch { return null; }
+}
+
+// List đơn DXC + HR của 1 user (theo email). Không email → recent (demo).
+function listApprovals(viewerEmail, limit) {
+  limit = limit || 60;
+  const openId = viewerEmail ? resolveUserByEmail(viewerEmail) : null;
+  const reqCond = openId ? { filter: { conjunction: 'and', conditions: [{ field_name: 'Requester', operator: 'contains', value: [openId] }] } } : {};
+  const items = [];
+  try { // DXC bảng 57 (dedupe theo Instance)
+    const dxc = searchT1(BASE_57, TBL_57, { ...reqCond, sort: [{ field_name: 'Ngày giờ tạo', desc: true }] });
+    const seen = new Set();
+    for (const it of (dxc.data && dxc.data.items || [])) {
+      const f = it.fields; const inst = asText(f['Instance']); if (!inst || seen.has(inst)) continue; seen.add(inst);
+      const id = (asText(f['DXC-ID']) || '').replace(/K\d+$/, '');
+      const amt = asText(f['4F_Số tiền']); const cur = asText(f['4F_Tiền tệ']) || 'VND';
+      items.push({ system: 'dxc', instance: inst, id, title: 'Đề Xuất Chi · ' + id, status: normStatus(asText(f['4L_Status của cả LC'])), requester: personName(f['Requester']), dept: asText(f['4F_Phòng ban']) || '—', sub: amt ? fmtAmount(Number(String(amt).replace(/[^\d.-]/g, '')), cur) : (asText(f['Mô tả Lô Chi']) || ''), time: asText(f['1F_Ngày giờ tạo (text)']) || '' });
+    }
+  } catch (e) { /* skip */ }
+  try { // HR table
+    const hr = searchT1(HR_BASE_T1, HR_TBL, reqCond);
+    for (const it of (hr.data && hr.data.items || [])) {
+      const f = it.fields; const inst = asText(f['1A_InstanceCode']); if (!inst) continue;
+      items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: asText(f['4L_Họ và tên']) || personName(f['Requester']), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: asText(f['Serial no.']) || '' });
+    }
+  } catch (e) { /* skip */ }
+  items.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
+  return { viewer: viewerEmail || null, resolved: openId, count: items.length, items: items.slice(0, limit) };
+}
+
 module.exports = {
   PROFILE_APPROVAL, PROFILE_IM, SYS_BY_CODE,
   fetchInstance, normalize, buildCard, DEMO,
   resolveRequester, sendCard, patchCard, receiveType,
   getSent, putSent, resolveUsers,
   initials, avatarColor, fmtTime, nowStamp,
+  listApprovals, resolveUserByEmail,
 };

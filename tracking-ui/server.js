@@ -87,10 +87,20 @@ const server = http.createServer(async (req, res) => {
   log(`${req.method} ${req.url}`);
 
   try {
-    // ── Health ──
+    // ── Health (JSON) ──
+    if (req.method === 'GET' && (p === '/health' || p === '/healthz')) {
+      return sendJson(res, 200, { ok: true, name: 'approval-tracking', port: PORT });
+    }
+
+    // ── Trang chủ web app: danh sách đơn của user ──
     if (req.method === 'GET' && p === '/') {
-      return sendJson(res, 200, { ok: true, name: 'approval-tracking', port: PORT,
-        endpoints: ['GET /track', 'GET /track/data', 'GET /track/card', 'POST /send', 'POST /event'] });
+      try {
+        const html = fs.readFileSync(path.join(PUBLIC_DIR, 'home.html'));
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+        return res.end(html);
+      } catch {
+        return sendJson(res, 200, { ok: true, name: 'approval-tracking', note: 'home.html chưa có' });
+      }
     }
 
     // ── H5 page ──
@@ -111,6 +121,17 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         log(`data err ${code}: ${e.message}`);
         return sendJson(res, 200, { error: `Không truy cập được — không đọc được đề xuất (${code}). Mã sai hoặc đơn đã xoá.` });
+      }
+    }
+
+    // ── List đơn của user (cho trang chủ web app) ──
+    if (req.method === 'GET' && p === '/track/list') {
+      const email = (u.searchParams.get('email') || u.searchParams.get('u') || '').trim();
+      try {
+        return sendJson(res, 200, lib.listApprovals(email || null));
+      } catch (e) {
+        log(`list err: ${e.message}`);
+        return sendJson(res, 200, { error: e.message, items: [] });
       }
     }
 
