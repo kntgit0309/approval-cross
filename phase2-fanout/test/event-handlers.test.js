@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+// .data riêng cho process test này → tránh race với file test khác chạy song song
+process.env.PHASE2_DATA_DIR = path.join(require('os').tmpdir(), `phase2-test-events-${process.pid}`);
 const { handleIsvEvent } = require('../src/event-handlers');
 const appTicketStore = require('../src/app-ticket-store');
 

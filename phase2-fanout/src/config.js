@@ -10,7 +10,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT, 'config');
-const DATA_DIR = path.join(ROOT, '.data');
+// PHASE2_DATA_DIR override → cô lập state cho test (tránh 2 process test share .data/*.json)
+const DATA_DIR = process.env.PHASE2_DATA_DIR || path.join(ROOT, '.data');
 
 function readJson(file, fallback) {
   try {

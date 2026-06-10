@@ -7,6 +7,8 @@
 process.env.ISV_APP_ID = 'cli_isv_phase2';
 process.env.ISV_APP_SECRET = 'isv-secret';
 const path = require('path');
+// .data riêng cho process test này → tránh race với file test khác chạy song song
+process.env.PHASE2_DATA_DIR = path.join(require('os').tmpdir(), `phase2-test-fanout-${process.pid}`);
 process.env.CREDENTIALS_FILE = path.join(__dirname, 'fixtures', 'credentials.test.json');
 
 const test = require('node:test');
