@@ -113,8 +113,11 @@ function render(d){
 function jump(id){ const n=document.getElementById(id); if(n)n.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 const params=new URLSearchParams(location.search);
-const code=params.get('instance')||params.get('id')||'DEMO';
-const sys=params.get('sys')||'';
+let code=params.get('instance')||params.get('id')||'';
+let sys=params.get('sys')||'';
+// deep-link path-segment (mobile Lark không decode '?' trong applink) — /track/v/<sys>/<instance>
+if(!code){ const m=location.pathname.match(/\/track\/v\/([^/]+)\/(.+)$/); if(m){ sys=decodeURIComponent(m[1]); code=decodeURIComponent(m[2]); } }
+if(!code) code='DEMO';
 fetch('/track/data?instance='+encodeURIComponent(code)+(sys?'&sys='+encodeURIComponent(sys):''))
   .then(r=>r.json()).then(d=>{ if(d&&d.error){ document.getElementById('doc').innerHTML='<div class="err">'+esc(d.error)+'</div>'; } else render(d); })
   .catch(e=>{ document.getElementById('doc').innerHTML='<div class="err">Lỗi tải: '+esc(e.message)+'</div>'; });

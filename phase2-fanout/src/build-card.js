@@ -11,6 +11,7 @@ const STATUS_THEME = {
   DELETED:    { template: 'grey',   icon: '🚫', title: 'đã bị xóa' },
   TERMINATED: { template: 'grey',   icon: '🛑', title: 'đã kết thúc' },
   REVERTED:   { template: 'orange', icon: '↩️', title: 'đã bị trả về' },
+  PENDING:    { template: 'blue',   icon: '⏳', title: 'đang chờ duyệt' },
 };
 
 function nowStampICT(now = new Date()) {

@@ -1,6 +1,7 @@
 # Quy trình thêm app SSO cho 1 org (web app "Đơn của tôi")
 
-> Lặp các bước này cho **6 org còn lại (1, 3, 4, 6, 7, 8)**. org 2 + org 5 đã xong.
+> ĐÃ SETUP ĐỦ 7 org: **org 2, 3, 4, 5, 6, 7, 8**. **org 1 không có nhân sự → không cần.**
+> (Khi thêm org mới: thêm vào `sso-config.json` apps + chạy lại build credentials phase2 để noti có org đó.)
 > Trang tự dò org (try-each) → **mọi app dùng CHUNG 1 Home URL, KHÔNG cần `?org=`**.
 
 ---

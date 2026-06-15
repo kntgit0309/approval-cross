@@ -105,7 +105,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── H5 page ──
-    if (req.method === 'GET' && (p === '/track' || p === '/track/')) {
+    if (req.method === 'GET' && (p === '/track' || p === '/track/' || p.startsWith('/track/v/'))) {
       const file = path.join(PUBLIC_DIR, 'track.html');
       const html = fs.readFileSync(file);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
