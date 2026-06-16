@@ -1,0 +1,15 @@
+{
+  "name": "hdld-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "HĐLĐ generator — đọc bảng 24 (record nhân sự) → map biến qua bảng 27 → copy template Google Docs (bảng 26) + replace {{Bxxx}} → ghi link tài liệu về File Docs. Đọc/ghi Lark Base qua lark-cli, sinh doc qua Google service account.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "gen": "node generate.js"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}

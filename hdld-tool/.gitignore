@@ -1,0 +1,5 @@
+node_modules/
+server.log
+.env
+sa-key.json
+*.sa.json
