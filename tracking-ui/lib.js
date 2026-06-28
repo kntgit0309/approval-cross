@@ -21,7 +21,7 @@ const path = require('path');
 
 /* ─── Hằng số ─────────────────────────────────────────────────────────────── */
 const LARK = '/opt/homebrew/bin/lark-cli';
-const PROFILE_APPROVAL = 'tenant2';              // KAI — nơi chứa Approval instance
+const PROFILE_APPROVAL = process.env.APPROVAL_PROFILE || 'cli_a968bc93f5381e17'; // KAI — nơi chứa Approval instance (profile lark-cli; 'tenant2' alias đã bị bỏ)
 // Bot gửi tin nhắn cho user — đổi qua env BOT_PROFILE (profile lark-cli của bot publish DM được).
 // Mặc định cli_a80df... (writer-app) KHÔNG DM user được → set BOT_PROFILE sang bot của bạn.
 const PROFILE_IM = process.env.BOT_PROFILE || 'cli_a80df38cc639d02f';
