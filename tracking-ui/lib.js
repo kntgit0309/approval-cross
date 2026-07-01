@@ -487,7 +487,19 @@ const TBL_20_NS = 'tbl0edSaPODwl2Ne';               // bảng 20 NS (cùng base 
 const STATUS_NORM = { approved: 'approved', done: 'approved', pending: 'in_progress', reverted: 'in_progress', 'under review': 'in_progress', rejected: 'rejected', canceled: 'canceled', deleted: 'canceled' };
 function normStatus(s) { return STATUS_NORM[String(s || '').toLowerCase()] || 'in_progress'; }
 function searchT1(base, table, body, pageSize) {
-  return larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params: { page_size: pageSize || 200 }, data: { automatic_fields: true, ...(body || {}) } });
+  return larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params: { page_size: pageSize || 500 }, data: { automatic_fields: true, ...(body || {}) } });
+}
+// Lấy HẾT record (phân trang) — tránh sót đơn khi user nhiều record hơn 1 trang.
+function searchAllT1(base, table, body) {
+  const out = []; let pageToken = null, guard = 0;
+  do {
+    const params = { page_size: 500 }; if (pageToken) params.page_token = pageToken;
+    const j = larkApi(PROFILE_BASE_T1, 'POST', `/open-apis/bitable/v1/apps/${base}/tables/${table}/records/search`, { params, data: { automatic_fields: true, ...(body || {}) } });
+    const d = (j && j.data) || {};
+    for (const it of (d.items || [])) out.push(it);
+    pageToken = d.has_more ? d.page_token : null;
+  } while (pageToken && ++guard < 12);   // tối đa 12 trang × 500 = 6000 record
+  return out;
 }
 function personName(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.name || o.en_name || ''; }
 function personId(v) { const o = (Array.isArray(v) ? v[0] : v) || {}; return o.id || o.open_id || ''; }
@@ -522,16 +534,16 @@ function resolveViewerOpenId(email, name) {
 
 // List đơn DXC + HR của 1 user (theo email). Không email → recent (demo).
 function listApprovals(viewerEmail, viewerName, limit) {
-  limit = limit || 60;
+  limit = limit || 500;
   const hasViewer = !!(viewerEmail || viewerName);
   const openId = hasViewer ? resolveViewerOpenId(viewerEmail, viewerName) : null;
   if (hasViewer && !openId) return { viewer: viewerName || viewerEmail, resolved: null, count: 0, items: [], note: 'không khớp nhân sự trong bảng 20' };
   const reqCond = openId ? { filter: { conjunction: 'and', conditions: [{ field_name: 'Requester', operator: 'contains', value: [openId] }] } } : {};
   const items = [];
   try { // DXC bảng 57 (dedupe theo Instance)
-    const dxc = searchT1(BASE_57, TBL_57, { ...reqCond, sort: [{ field_name: 'Ngày giờ tạo', desc: true }] });
+    const dxcItems = searchAllT1(BASE_57, TBL_57, { ...reqCond, sort: [{ field_name: 'Ngày giờ tạo', desc: true }] });
     const seen = new Set();
-    for (const it of (dxc.data && dxc.data.items || [])) {
+    for (const it of dxcItems) {
       const f = it.fields; const inst = asText(f['Instance']); if (!inst || seen.has(inst)) continue; seen.add(inst);
       const id = (asText(f['DXC-ID']) || '').replace(/K\d+$/, '');
       const amt = asText(f['4F_Số tiền']); const cur = asText(f['4F_Tiền tệ']) || 'VND';
@@ -539,8 +551,8 @@ function listApprovals(viewerEmail, viewerName, limit) {
     }
   } catch (e) { /* skip */ }
   try { // HR table
-    const hr = searchT1(HR_BASE_T1, HR_TBL, reqCond);
-    for (const it of (hr.data && hr.data.items || [])) {
+    const hrItems = searchAllT1(HR_BASE_T1, HR_TBL, reqCond);
+    for (const it of hrItems) {
       const f = it.fields; const inst = asText(f['1A_InstanceCode']); if (!inst) continue;
       const hrReq = personName(f['Requester']) || asText(f['4L_Họ và tên']) || '';
       items.push({ system: 'hr', instance: inst, id: asText(f['RQ-ID']) || '', title: asText(f['Loại đơn từ']) || 'Đơn từ', status: normStatus(asText(f['Status 2 (manual)'])), requester: hrReq, avatar: personAvatar(f['Requester']), initials: initials(hrReq || '?'), dept: asText(f['4L_Phòng ban']) || asText(f['1F_Phòng ban(text)']) || '—', sub: asText(f['Nhóm đơn từ']) || '', time: Number(it.created_time) || 0 });

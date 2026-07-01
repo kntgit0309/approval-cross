@@ -117,11 +117,14 @@ const server = http.createServer(async (req, res) => {
       const code = (u.searchParams.get('instance') || u.searchParams.get('id') || '').trim();
       const sys = u.searchParams.get('sys') || '';
       if (!code) return sendJson(res, 200, { error: 'Không truy cập được — thiếu mã đơn (instance).' });
-      try {
-        return sendJson(res, 200, getCanonical(code, sys));
-      } catch (e) {
-        log(`data err ${code}: ${e.message}`);
-        return sendJson(res, 200, { error: `Không truy cập được — không đọc được đề xuất (${code}). Mã sai hoặc đơn đã xoá.` });
+      for (let i = 0; i < 3; i++) {
+        try {
+          return sendJson(res, 200, getCanonical(code, sys));
+        } catch (e) {
+          log(`data err ${code} (try ${i}): ${e.message}`);
+          if (i < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }  // retry: đơn đang settle / token refresh
+          return sendJson(res, 200, { error: `Không truy cập được — không đọc được đề xuất (${code}). Thử lại sau ít phút, hoặc đơn đã xoá.` });
+        }
       }
     }
 
