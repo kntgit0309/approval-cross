@@ -29,6 +29,12 @@ const fs = require('fs');
 const path = require('path');
 const lib = require('./lib');
 const sso = require('./sso');
+// Phase 2 fan-out (cross-tenant noti qua bot app org) — optional, chỉ có khi phase2-fanout + config tồn tại (mini)
+let fanout = null, orgDir = { byUsername: {}, byEmail: {} };
+try {
+  fanout = require('../phase2-fanout/src/fanout').createFanout({ mode: 'custom' });
+  orgDir = JSON.parse(fs.readFileSync(path.join(__dirname, '../phase2-fanout/config/email-org.json'), 'utf8'));
+} catch (e) { /* phase2 chưa cấu hình → /track/noti tắt */ }
 
 const PORT = process.env.PORT || 3400;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -126,6 +132,40 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { error: `Không truy cập được — không đọc được đề xuất (${code}). Thử lại sau ít phút, hoặc đơn đã xoá.` });
         }
       }
+    }
+
+    // ── Auto-noti: dxc-push/approval-push POST vào đây khi status đổi → fan-out card tới requester đúng org ──
+    if (req.method === 'POST' && p === '/track/noti') {
+      const body = await readBody(req);
+      const instance = body && (body.instance || body.instance_code);
+      const status = body && body.status;
+      const sys = (body && body.sys) || 'dxc';
+      if (!instance || !status) return sendJson(res, 200, { ok: false, err: 'thiếu instance/status' });
+      if (!fanout) return sendJson(res, 200, { ok: false, err: 'fan-out chưa cấu hình' });
+      const FIRE = ['APPROVED', 'REJECTED', 'CANCELED', 'DELETED', 'TERMINATED', 'PENDING'];
+      if (!FIRE.includes(status)) return sendJson(res, 200, { ok: true, skipped: 'status ' + status });
+      try {
+        const d = getCanonical(instance, sys);
+        const uname = d && d.submitter && d.submitter.name;
+        const entry = uname && orgDir.byUsername && orgDir.byUsername[uname];
+        if (!entry) { log(`noti skip ${instance}: requester '${uname}' không trong directory`); return sendJson(res, 200, { ok: false, skipped: 'no-directory', uname }); }
+        const org = entry.org, email = entry.email, tenant = 'TENANT_ORG' + String(org).replace(/\D/g, '');
+        const appId = sso.appIdFor(org);
+        const detailUrl = 'https://applink.larksuite.com/client/web_app/open?appId=' + appId + '&path=track/v/' + sys + '/' + instance;
+        const meta = {}; (d.meta || []).forEach(m => { meta[m.label] = m.value; });
+        const lcId = ((d.title || '').split('·').pop() || '').trim() || d.serial || String(instance).slice(0, 8);
+        const card = {
+          type: sys === 'hr' ? 'Đơn HR' : 'Đề Xuất Chi',
+          title: lcId,
+          requester: uname,
+          dept: d.submitter && d.submitter.dept,
+          fields: [{ label: 'Số tiền', value: meta['Số tiền'] }, { label: 'Hạn thanh toán', value: meta['Hạn thanh toán'] }, { label: 'Nội dung', value: meta['Nội dung'] }].filter(f => f.value),
+          detailUrl,
+        };
+        const r = await fanout.notifyApprovalResult({ instanceCode: instance, status, businessId: email, tenantKey: tenant, card });
+        log(`noti ${instance} ${status} → ${email}(${org}): ${r.ok ? 'sent ' + (r.messageId || '') : 'skip ' + (r.skipped || r.error)}`);
+        return sendJson(res, 200, r);
+      } catch (e) { log(`noti err ${instance}: ${e.message}`); return sendJson(res, 200, { ok: false, error: e.message }); }
     }
 
     // ── List đơn của user (cho trang chủ web app) ──
