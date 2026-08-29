@@ -39,7 +39,9 @@ function fmtDate(ms) {
 // KHÔNG khớp "cấp"/"sinh" (vì "Phụ cấp"/"Lương..." là SỐ TIỀN, sẽ bị format nhầm thành ngày).
 function isDateName(name) {
   const s = String(name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  return /\bngay\b|\bdate\b|bat dau|ket thuc/.test(s);
+  // "ngay" đứng riêng (kể cả sau "_", vd "4F_Ngày cấp"); KHÔNG khớp "cấp"/"sinh" trơ để
+  // tránh "Phụ cấp" (số tiền) bị format thành ngày.
+  return /(^|[^a-z])ngay([^a-z]|$)|\bdate\b|bat dau|ket thuc/.test(s);
 }
 // Lấy giá trị 1 biến từ record, có format ngày nếu hợp lý
 function resolveValue(rawVal, sourceName) {
@@ -58,16 +60,36 @@ function resolveValue(rawVal, sourceName) {
 // Ngày ký HĐ: bảng 27 trỏ B028/B029/B030 → field "Ngày"/"Tháng"/"Năm" (KHÔNG tồn tại ở bảng 24),
 // B007 → "2M_Ngày thực hiện" (sai tên). Nguồn ngày ký thật trong record = 4F_Ngày thực hiện (DD/MM/YYYY).
 // Map các "Tên trên Base" hỏng này về thành phần ngày tương ứng.
-const SIGN_DATE_FIELD = '4F_Ngày thực hiện';
+// Nguồn ngày ký = NGÀY BẮT ĐẦU HĐLĐ (fallback Ngày thực hiện). Field có thể là
+// "DD/MM/YYYY" (text) hoặc số serial/epoch → parseDateField xử lý cả hai.
+const SIGN_DATE_FIELDS = ['4F_HĐLĐ Ngày bắt đầu', '4F_Ngày thực hiện'];
 const DATE_ALIAS = {
   'Ngày': 'day', 'Tháng': 'month', 'Năm': 'year',
   '2M_Ngày thực hiện': 'full', '4F_Ngày thực hiện': 'full',
 };
+function partsFromMs(ms) {
+  const t = new Date(ms + 7 * 3600 * 1000);
+  const p = x => String(x).padStart(2, '0');
+  return { day: p(t.getUTCDate()), month: p(t.getUTCMonth() + 1), year: String(t.getUTCFullYear()), full: `${p(t.getUTCDate())}/${p(t.getUTCMonth() + 1)}/${t.getUTCFullYear()}` };
+}
+function parseDateField(raw) {
+  const s = lib.valToText(raw);
+  const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return { day: m[1].padStart(2, '0'), month: m[2].padStart(2, '0'), year: m[3], full: `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}` };
+  let num = null;
+  if (typeof raw === 'number') num = raw;
+  else if (Array.isArray(raw) && typeof raw[0] === 'number') num = raw[0];
+  else if (raw && typeof raw === 'object' && typeof raw.value === 'number') num = raw.value;
+  else if (/^\d+$/.test(s)) num = Number(s);
+  const ms = num != null ? toDateMs(num) : null;
+  return ms ? partsFromMs(ms) : null;
+}
 function signDateParts(fields) {
-  const s = lib.valToText(fields[SIGN_DATE_FIELD]);
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  return { day: m[1], month: m[2], year: m[3], full: s };
+  for (const fn of SIGN_DATE_FIELDS) {
+    const parts = parseDateField(fields[fn]);
+    if (parts) return parts;
+  }
+  return null;
 }
 
 // Đọc số tiền thành chữ tiếng Việt (vd 9000000 → "Chín triệu đồng", 360000 → "Ba trăm sáu mươi nghìn đồng").
@@ -116,7 +138,7 @@ function parseOverride() {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
-async function generate(record24Id, { log = console.log, force = false, settleWaitMs = 0 } = {}) {
+async function generate(record24Id, { log = console.log, force = false, settleWaitMs = 0, templateDocId = '', templateName = '', writeBack = true } = {}) {
   if (!record24Id) throw new Error('Thiếu record_id (bảng 24)');
   const warnings = [];
 
@@ -145,54 +167,62 @@ async function generate(record24Id, { log = console.log, force = false, settleWa
     log(`[gen] ${record24Id} settle-wait xong, ready=${!!isReady(fields)}`);
   }
 
-  // 2) Tìm template (bảng 26) record từ field "Mã template" (link)
-  const tplRecIds = lib.extractRecordIds(fields[F.rec24.maTemplate]);
-  if (!tplRecIds.length) {
-    // Chưa chọn template (hoặc field chưa settle khi record vừa tạo) → skip mềm, automation retry vô hại.
-    log(`[gen] ${record24Id} bỏ qua — chưa có Mã template`);
-    return { ok: true, skipped: 'no_template', record_id: record24Id };
-  }
-  // Settle-guard: record vừa tạo có thể chưa kịp tính 4F_Họ và tên → chưa sẵn sàng.
-  if (!lib.valToText(fields['4F_Họ và tên']) && !force) {
-    log(`[gen] ${record24Id} bỏ qua — 4F_Họ và tên chưa settle`);
-    return { ok: true, skipped: 'not_ready', record_id: record24Id };
-  }
-  if (tplRecIds.length > 1) warnings.push(`record link ${tplRecIds.length} template, dùng cái đầu: ${tplRecIds[0]}`);
-  const tplRecId = tplRecIds[0];
-  const tpl = lib.getRecord(lib.TBL26, tplRecId);
-  if (!tpl) throw new Error(`Không tìm thấy template ${tplRecId} ở bảng 26`);
-  const tplFields = tpl.fields || {};
-  const tplName = lib.valToText(tplFields[F.tpl26.ten]) || 'HĐLĐ';
-
-  // 3) Doc-id nguồn: ƯU TIÊN doc trong "Link template" (doc người sửa thật),
-  //    fallback field "ID template". Cảnh báo khi 2 cái khác nhau (case TEM001).
-  const linkUrl   = lib.valToText(tplFields[F.tpl26.linkTemplate]);
-  const idFromLink = lib.docIdFromUrl(linkUrl);
-  const idDeclared = lib.valToText(tplFields[F.tpl26.idTemplate]);
-  let srcDocId = idFromLink || idDeclared;
-  if (idFromLink && idDeclared && idFromLink !== idDeclared) {
-    warnings.push(`⚠️ Template "${tplName}": ID template (${idDeclared}) ≠ doc trong Link template (${idFromLink}). Dùng doc trong Link template.`);
-  }
-  if (!srcDocId) throw new Error(`Template "${tplName}" không có doc-id (cả Link template lẫn ID template đều rỗng)`);
-
-  // 3b) Override thủ công (env TEMPLATE_DOC_OVERRIDE) nếu cần ép doc khác
-  const override = parseOverride();
-  if (override[srcDocId]) {
-    warnings.push(`override doc-id ${srcDocId} → ${override[srcDocId]}`);
-    srcDocId = override[srcDocId];
-  }
-
-  // 4) Lọc biến áp dụng cho template này từ bảng 27 (link Template chứa tplRecId).
+  let srcDocId, tplName, vars, tplRecId = null;
   const allVars = lib.listRecords(lib.TBL27);
-  let vars = allVars.filter(v => lib.extractRecordIds((v.fields || {})[F.var27.template]).includes(tplRecId));
-  if (!vars.length) {
-    // Fallback: dùng CSV "Biến" trên record template
-    const csv = lib.valToText(tplFields[F.tpl26.bien]).split(/[,\s]+/).filter(Boolean);
-    const byId = new Map(allVars.map(v => [lib.valToText((v.fields || {})[F.var27.bId]), v]));
-    vars = csv.map(id => byId.get(id)).filter(Boolean);
-    warnings.push(`bảng 27 không link template ${tplRecId}; fallback theo CSV "Biến" (${vars.length} biến)`);
+
+  if (templateDocId) {
+    // ONE-OFF: dùng template chỉ định (kể cả .docx), bỏ qua "Mã template".
+    // Dùng TOÀN BỘ biến bảng 27 — replaceAllText chỉ tác động placeholder có trong doc nên thừa vô hại.
+    if (!lib.valToText(fields['4F_Họ và tên']) && !force) {
+      log(`[gen] ${record24Id} bỏ qua — 4F_Họ và tên chưa settle`);
+      return { ok: true, skipped: 'not_ready', record_id: record24Id };
+    }
+    srcDocId = templateDocId;
+    tplName = templateName || 'HĐLĐ';
+    vars = allVars;
+  } else {
+    // 2) Tìm template (bảng 26) record từ field "Mã template" (link)
+    const tplRecIds = lib.extractRecordIds(fields[F.rec24.maTemplate]);
+    if (!tplRecIds.length) {
+      // Chưa chọn template (hoặc field chưa settle khi record vừa tạo) → skip mềm, automation retry vô hại.
+      log(`[gen] ${record24Id} bỏ qua — chưa có Mã template`);
+      return { ok: true, skipped: 'no_template', record_id: record24Id };
+    }
+    // Settle-guard: record vừa tạo có thể chưa kịp tính 4F_Họ và tên → chưa sẵn sàng.
+    if (!lib.valToText(fields['4F_Họ và tên']) && !force) {
+      log(`[gen] ${record24Id} bỏ qua — 4F_Họ và tên chưa settle`);
+      return { ok: true, skipped: 'not_ready', record_id: record24Id };
+    }
+    if (tplRecIds.length > 1) warnings.push(`record link ${tplRecIds.length} template, dùng cái đầu: ${tplRecIds[0]}`);
+    tplRecId = tplRecIds[0];
+    const tpl = lib.getRecord(lib.TBL26, tplRecId);
+    if (!tpl) throw new Error(`Không tìm thấy template ${tplRecId} ở bảng 26`);
+    const tplFields = tpl.fields || {};
+    tplName = lib.valToText(tplFields[F.tpl26.ten]) || 'HĐLĐ';
+
+    // 3) Doc-id nguồn: ƯU TIÊN doc trong "Link template" (doc người sửa thật),
+    //    fallback field "ID template". Cảnh báo khi 2 cái khác nhau (case TEM001).
+    const linkUrl   = lib.valToText(tplFields[F.tpl26.linkTemplate]);
+    const idFromLink = lib.docIdFromUrl(linkUrl);
+    const idDeclared = lib.valToText(tplFields[F.tpl26.idTemplate]);
+    srcDocId = idFromLink || idDeclared;
+    if (idFromLink && idDeclared && idFromLink !== idDeclared) {
+      warnings.push(`⚠️ Template "${tplName}": ID template (${idDeclared}) ≠ doc trong Link template (${idFromLink}). Dùng doc trong Link template.`);
+    }
+    if (!srcDocId) throw new Error(`Template "${tplName}" không có doc-id (cả Link template lẫn ID template đều rỗng)`);
+
+    // 3b) Override thủ công (env TEMPLATE_DOC_OVERRIDE) nếu cần ép doc khác
+    const override = parseOverride();
+    if (override[srcDocId]) {
+      warnings.push(`override doc-id ${srcDocId} → ${override[srcDocId]}`);
+      srcDocId = override[srcDocId];
+    }
+
   }
-  if (!vars.length) throw new Error(`Không tìm được biến nào cho template "${tplName}"`);
+  // B-ID là GLOBAL (mỗi biến định nghĩa 1 lần ở bảng 27) → dùng TOÀN BỘ biến cho mọi template.
+  // replaceAllText chỉ đụng placeholder có trong doc nên biến thừa vô hại. Không lệ thuộc
+  // link/CSV per-template (một số template chỉ link lẻ vài biến → nếu lọc sẽ thiếu, sót {{Bxxx}}).
+  vars = allVars;
 
   // 5) Dựng map {{Bxxx}} → giá trị 4F_, ghi nhận biến không resolve được
   const map = {};
@@ -235,11 +265,14 @@ async function generate(record24Id, { log = console.log, force = false, settleWa
   const pdfUrl = pdf.webViewLink || `https://drive.google.com/file/d/${pdf.id}/view`;
 
   // File Docs & File PDF là field kiểu URL → bitable đòi object {link, text}, không nhận string trần.
-  lib.updateRecord(lib.TBL24, record24Id, {
-    [F.rec24.fileDocs]: { link: url, text: docName },
-    [F.rec24.filePdf]: { link: pdfUrl, text: `${docName}.pdf` },
-  });
-  log(`[gen] ✓ ${record24Id} → doc ${url} | pdf ${pdfUrl}`);
+  // writeBack=false (one-off thử template) → không ghi đè lên record.
+  if (writeBack) {
+    lib.updateRecord(lib.TBL24, record24Id, {
+      [F.rec24.fileDocs]: { link: url, text: docName },
+      [F.rec24.filePdf]: { link: pdfUrl, text: `${docName}.pdf` },
+    });
+  }
+  log(`[gen] ✓ ${record24Id} → doc ${url} | pdf ${pdfUrl}${writeBack ? '' : ' (không ghi Base)'}`);
 
   return {
     ok: true,

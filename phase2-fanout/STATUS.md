@@ -1,6 +1,18 @@
 # Phase 2 — Trạng thái & các bước còn lại
 
-> Cập nhật: 09/06/2026. Mục tiêu: fan-out trạng thái duyệt cross-tenant tới đúng user + trang chi tiết H5 như Lark Approval Center.
+> Cập nhật: 26/07/2026. Mục tiêu: fan-out trạng thái duyệt cross-tenant tới đúng user + trang chi tiết H5 như Lark Approval Center.
+
+## ✅ 26/07/2026 — Auto-trigger nối xong, đang chạy DRY-RUN
+
+- **7/7 org (2→8) có custom app + token OK** (`config/credentials.json` trên mini). Org 1 chỉ có account Admin test — không cần app.
+- **`notify-server.js` (:3600, launchd `com.phase2-noti.server`)** — auto-trigger noti cross-tenant:
+  `Lark event → approval-push:3100 (forward 'noti', đã patch server.js) → :3600 → /track/data (:3400) → email-org.json (khớp tên chịu sai dấu/đảo initials) → token org → open_id → buildStatusCard → DM`.
+  Mặc định **NOTI_DRY=1: chỉ log `[DRY] would send…` vào `notify.log`, KHÔNG gửi**. Bật thật = sửa `NOTI_DRY=0` trong plist + kickstart.
+- Test dry-run OK: DXC LC3186 (Vĩ, org7 APPROVED), HR (Hưng TB.HR org2 PENDING, Khoa org2 APPROVED). Idempotency instance+status+email khi gửi thật; PENDING cũng noti (đơn mới lên approval).
+- **Coverage (`dryrun-all-users.js`, đối chiếu bảng 20 "Danh sách NS" 130 người active)**: email-org.json 102 email — 98 resolve OK qua batch_get_id.
+  - 4 email map cũ KHÔNG còn ở org nào: khuongnda.des (org4), anhmn.des (org6), bichntn.tv + suongvtt.tv (org8) → cần email mới.
+  - ~12 người có org nhưng không dò ra email (directory org không khai email / convention lạ) + ~20 người chưa có Org trong bảng 20 → cần HR bổ sung email/org rồi thêm vào email-org.json.
+- Chưa làm: promo (3083B2D4) + RTT (9C770ED9) chưa có sys trong tracking → notify-server bỏ qua; auto-patch card cross-tenant khi status đổi (mới gửi 1 card/status, chưa PATCH card cũ).
 
 ## ✅ Đã xong
 

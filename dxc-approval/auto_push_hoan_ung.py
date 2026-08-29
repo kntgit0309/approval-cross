@@ -12,7 +12,7 @@ CUT_OFF_DATE: chỉ push LC tạo SAU ngày này (bảo vệ khỏi push LC cũ)
 import json, subprocess, os, sys, time, urllib.request
 from datetime import datetime
 
-NOTI_WEBHOOK = os.environ.get('NOTI_WEBHOOK', '')
+NOTI_WEBHOOK = 'https://open.larksuite.com/open-apis/bot/v2/hook/cd0c70bd-1e37-4c42-9185-639d4948cdcf'
 
 # Chỉ push LC tạo SAU ngày này — tránh push LC cũ hàng loạt
 # Format: YYYY-MM-DD (ICT +07:00)

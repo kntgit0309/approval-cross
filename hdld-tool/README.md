@@ -59,8 +59,8 @@ Body `/generate`:
 Mỗi lần generate: copy Google Doc template → replace `{{Bxxx}}` → **xuất PDF** → ghi link doc về `File Docs` và link PDF về `File PDF` (cả hai field kiểu URL → ghi object `{link,text}`).
 
 Xử lý giá trị đặc biệt:
-- **Ngày** (field tên chứa `ngày`/`bắt đầu`/`kết thúc`, giá trị số serial/epoch) → format `DD/MM/YYYY`. KHÔNG khớp "cấp"/"sinh" để tránh format nhầm số tiền ("Phụ cấp" = số).
-- **Ngày ký** B028/B029/B030 (+B007) tách từ `4F_Ngày thực hiện` thành ngày/tháng/năm.
+- **Ngày** (field tên chứa `ngày` — kể cả sau `_` như `4F_Ngày cấp` — hoặc `bắt đầu`/`kết thúc`, giá trị số serial/epoch/`DD/MM/YYYY`) → format `DD/MM/YYYY`. KHÔNG khớp "cấp"/"sinh" trơ để tránh format nhầm số tiền ("Phụ cấp" = số).
+- **Ngày ký** B028/B029/B030 (+B007) tách từ **`4F_HĐLĐ Ngày bắt đầu`** (fallback `4F_Ngày thực hiện`) thành ngày/tháng/năm; nguồn có thể là serial hoặc text.
 - **Bằng chữ** B031 (lương cơ bản) / B066 (phụ cấp) → đọc số tiền thành chữ tiếng Việt (vd `9000000` → "Chín triệu đồng").
 
 `POST /generate` trả JSON: `docUrl`, `docId`, `pdfUrl`, `pdfId`, `template{recordId,name,srcDocId}`, `varsCount`, **`unresolved`** (biến không tìm thấy field nguồn) và **`warnings`** (vd mismatch doc-id).

@@ -34,10 +34,12 @@ function clients() {
 }
 
 // Copy doc template → bản mới (tên = name), đặt trong DEST_FOLDER nếu có.
+// LUÔN ép mimeType = Google Doc: template native giữ nguyên; template .docx được CONVERT
+// sang Google Doc (nếu không, bản copy vẫn là .docx và Docs API replaceAllText sẽ lỗi).
 async function copyTemplate(srcDocId, name) {
   const { drive } = clients();
   const dest = process.env.GOOGLE_DEST_FOLDER_ID || '';
-  const requestBody = { name };
+  const requestBody = { name, mimeType: 'application/vnd.google-apps.document' };
   if (dest) requestBody.parents = [dest];
   const res = await drive.files.copy({
     fileId: srcDocId,

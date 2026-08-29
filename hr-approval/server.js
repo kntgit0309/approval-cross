@@ -21,6 +21,7 @@ const PROFILE_BASE = 'cli_a80df38cc639d02f';
 // Forward events of non-HR approval codes to dedicated servers
 const APPROVAL_FORWARD = {
   'DAD13F4B-3D66-4597-8263-1031A80D7FEF': { host: '127.0.0.1', port: 3200, label: 'dxc' },
+  '3083B2D4-583A-4A1F-9072-220BB655FC0F': { host: '127.0.0.1', port: 3501, label: 'promo' },
 };
 
 function forwardEvent(target, body) {
@@ -87,7 +88,8 @@ function findRecordByInstance(instanceCode) {
       '--field-id', F_INSTANCE,
       '--as', 'bot',
     ], { encoding: 'utf8' });
-    const j = JSON.parse(out);
+    const cleaned = out.split("\n").filter(l => !l.startsWith("`")).join("\n");
+    const j = JSON.parse(cleaned);
     const ids = j.data.record_id_list || [];
     const data = j.data.data || [];
     for (let i = 0; i < ids.length; i++) {
@@ -145,6 +147,8 @@ const server = http.createServer(async (req, res) => {
       const status = ev.status;
       const approvalCode = ev.approval_code;
       log('event', eventType || '(no-type)', 'inst=' + instCode, 'status=' + status, 'code=' + approvalCode);
+      // Phase 2: forward mọi event → notify-server :3600 (noti cross-tenant cho người đề xuất, fire-and-forget)
+      forwardEvent({ host: '127.0.0.1', port: 3600, label: 'noti' }, body);
       // Route to dedicated server if approval_code is forwarded
       if (approvalCode && APPROVAL_FORWARD[approvalCode]) {
         forwardEvent(APPROVAL_FORWARD[approvalCode], body);
@@ -156,7 +160,17 @@ const server = http.createServer(async (req, res) => {
         (async () => {
           for (let i = 0; i < 6; i++) {
             const recId = findRecordByInstance(instCode);
-            if (recId) { updateStatus(recId, status); return; }
+            if (recId) {
+              updateStatus(recId, status);
+              // fan-out: DM requester đúng org qua bot app — MỌI status (PENDING lúc submit + final)
+              try {
+                const _nb = JSON.stringify({ instance: instCode, status, sys: 'hr' });
+                const _nr = http.request({ hostname: '127.0.0.1', port: 3400, path: '/track/noti', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(_nb) } });
+                _nr.on('error', e => log('fanout err', e.message));
+                _nr.write(_nb); _nr.end();
+              } catch (e) { log('fanout err', e.message); }
+              return;
+            }
             await new Promise(r => setTimeout(r, 3000));
           }
           log('no base record matching after retries', instCode);
@@ -177,8 +191,10 @@ const server = http.createServer(async (req, res) => {
     const recordId = (body && (body.record_id || body.recordId)) || (typeof body === 'string' ? body : null);
     if (!recordId) return jsonRes(res, 400, { error: 'missing record_id', received: body });
     log('push spawn', recordId);
+    // stdout/stderr push.js → push.log (trước đây 'ignore' → mất sạch, không truy được lỗi upload file)
+    const pushLogFd = require('fs').openSync(path.join(__dirname, 'push.log'), 'a');
     const child = spawn('node', [PUSH_SCRIPT, recordId], {
-      detached: true, stdio: 'ignore',
+      detached: true, stdio: ['ignore', pushLogFd, pushLogFd],
     });
     child.unref();
     return jsonRes(res, 200, { ok: true, record_id: recordId });
